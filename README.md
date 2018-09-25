@@ -52,6 +52,8 @@ print("result of other service" + res)
 
 ```
 
+** do_service method will automatically try other nodes when one node return a HTTP error, until one success or all nodes being tried **
+
 There are several HA strategies when using discovery client. You can specify it in `init_discovery_client`. They are:
 
 * HA_STRATEGY_RANDOM, default strategy, find an node randamly.
