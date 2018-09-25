@@ -1,0 +1,1 @@
+name = "py_eureka_client"
