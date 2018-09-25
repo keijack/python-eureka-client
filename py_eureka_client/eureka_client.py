@@ -903,7 +903,8 @@ class DiscoveryClient:
                    data=None, timeout=_DEFAULT_TIME_OUT,
                    cafile=None, capath=None, cadefault=False, context=None):
         error_nodes = []
-        node = self.__get_availabe_service(application_name)
+        app_name = application_name.upper()
+        node = self.__get_availabe_service(app_name)
 
         while node is not None:
             try:
@@ -929,7 +930,7 @@ class DiscoveryClient:
             except (urllib2.HTTPError, urllib2.URLError):
                 _logger.warn("do service %s in node [%s] error, use next node." % (service, node.instanceId))
                 error_nodes.append(node.instanceId)
-                node = self.__get_availabe_service(application_name, error_nodes)
+                node = self.__get_availabe_service(app_name, error_nodes)
 
         raise urllib2.URLError("Try all up instances in registry, but all fail")
 
