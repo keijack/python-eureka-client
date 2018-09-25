@@ -6,13 +6,25 @@ import os
 import re
 import socket
 import time
-import urllib2
+try:
+    import urllib2
+except ImportError:
+    import urllib.request as urllib2
 import random
 from threading import Timer
-from urlparse import urlparse
+try:
+    from urlparse import urlparse
+except ImportError:
+    from urllib.parse import urlparse
 import xml.etree.ElementTree as ElementTree
 
-from __logger__ import getLogger
+from py_eureka_client.__logger__ import getLogger
+
+try:
+    long(0)
+except NameError:
+    # python 3 does no longer support long method, use int instead
+    long = int
 
 _logger = getLogger("EurekaClient")
 
@@ -149,11 +161,11 @@ class LeaseInfo:
     def __init__(self,
                  renewalIntervalInSecs=30,
                  durationInSecs=90,
-                 registrationTimestamp=0L,
-                 lastRenewalTimestamp=0L,
-                 renewalTimestamp=0L,
-                 evictionTimestamp=0L,
-                 serviceUpTimestamp=0L):
+                 registrationTimestamp=0,
+                 lastRenewalTimestamp=0,
+                 renewalTimestamp=0,
+                 evictionTimestamp=0,
+                 serviceUpTimestamp=0):
         self.renewalIntervalInSecs = renewalIntervalInSecs
         self.durationInSecs = durationInSecs
         self.registrationTimestamp = registrationTimestamp
@@ -202,8 +214,8 @@ class Instance:
                  leaseInfo=LeaseInfo(),
                  isCoordinatingDiscoveryServer=False,
                  metadata=None,
-                 lastUpdatedTimestamp=0L,
-                 lastDirtyTimestamp=0L,
+                 lastUpdatedTimestamp=0,
+                 lastDirtyTimestamp=0,
                  actionType=ACTION_TYPE_ADDED,  # ADDED, MODIFIED, DELETED
                  asgName=""):
         self.instanceId = instanceId
@@ -344,7 +356,7 @@ def _get_applications_(url, regions=[]):
         _url = _url + ("&" if "?" in _url else "?") + "regions=" + (",".join(regions))
 
     f = urllib2.urlopen(_url, timeout=_DEFAULT_TIME_OUT)
-    txt = f.read()
+    txt = f.read().decode("utf-8")
     f.close()
     return _build_applications(ElementTree.fromstring(txt))
 
@@ -485,7 +497,7 @@ def get_secure_vip(eureka_server, svip, regions=[]):
 def get_application(eureka_server, app_name):
     url = _format_url(eureka_server) + "apps/" + app_name
     f = urllib2.urlopen(url, timeout=_DEFAULT_TIME_OUT)
-    txt = f.read()
+    txt = f.read().decode('utf-8')
     f.close()
     return _build_application(ElementTree.fromstring(txt))
 
@@ -500,7 +512,7 @@ def get_instance(eureka_server, instance_id):
 
 def _get_instance_(url):
     f = urllib2.urlopen(url, timeout=_DEFAULT_TIME_OUT)
-    txt = f.read()
+    txt = f.read().decode('utf-8')
     f.close()
     return _build_instance(ElementTree.fromstring(txt))
 
@@ -921,7 +933,7 @@ class DiscoveryClient:
                     req.add_header(k, v)
 
                 response = urllib2.urlopen(req, data=data, timeout=timeout, cafile=cafile, capath=capath, cadefault=cadefault, context=context)
-                res_txt = response.read()
+                res_txt = response.read().decode("utf-8")
                 response.close()
                 if return_type.lower() in ("json", "dict", "dictionary"):
                     return json.loads(res_txt)

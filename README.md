@@ -6,7 +6,7 @@ This is an eureka client written in python, you can easily intergrate your pytho
 
 ## Support Python Version
 
-Python 2.7
+Python 2.7 / 3.6+
 
 ## Why choose
 
