@@ -6,7 +6,7 @@ This is an eureka client written in python, you can easily intergrate your pytho
 
 ## Support Python Version
 
-Python 2.7 / 3.6+
+Python 2.7 / 3.6+ (It should also work at 3.5, not test)
 
 ## Why choose
 
@@ -39,7 +39,7 @@ eureka_client.init_registry_client(registry_server="http://your-eureka-server-pe
 
 ```
 
-** If you do not specify your host and ip just like the example above, the client will choose one that could connect to eureka server. **
+*If you do not specify your host and ip just like the example above, the client will choose one that could connect to eureka server.*
 
 ### Discover other service from eureka server
 
@@ -62,7 +62,7 @@ print("result of other service" + res)
 
 ```
 
-** do_service method will automatically try other nodes when one node return a HTTP error, until one success or all nodes being tried **
+*do_service method will automatically try other nodes when one node return a HTTP error, until one success or all nodes being tried.*
 
 There are several HA strategies when using discovery client. You can specify it in `init_discovery_client`. They are:
 
