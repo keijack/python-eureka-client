@@ -4,6 +4,10 @@
 
 This is an eureka client written in python, you can easily intergrate your python components with spring cloud.
 
+## Support Python Version
+
+Python 2.7
+
 ## Why choose
 
 * Register your python components to eureka server.
