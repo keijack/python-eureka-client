@@ -38,7 +38,7 @@ First, init the discovery client after your server starts up.
 ```python
 import py_eureka_client.eureka_client as eureka_client
 
-eureka.init_discovery_client("http://192.168.3.116:8761/eureka/, http://192.168.3.116:8762/eureka/")
+eureka_client.init_discovery_client("http://192.168.3.116:8761/eureka/, http://192.168.3.116:8762/eureka/")
 ```
 
 Then, in your business code, use
@@ -46,7 +46,7 @@ Then, in your business code, use
 ```python
 import py_eureka_client.eureka_client as eureka_client
 
-cli = eureka.get_discovery_client()
+cli = eureka_client.get_discovery_client()
 res = cli.do_service("OTHER-SERVICE-NAME", "/service/context/path")
 print("result of other service" + res)
 
