@@ -16,6 +16,12 @@ This is an eureka client written in python, you can easily intergrate your pytho
 
 ## How to use
 
+### Install
+
+```Shell
+pip install py_eureka_client
+```
+
 ### Rister your python REST server to eureka server
 
 ```python
