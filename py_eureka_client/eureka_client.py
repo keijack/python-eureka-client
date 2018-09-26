@@ -708,18 +708,8 @@ class RegistryClient:
             _logger.exception("error!")
 
     def delete_status_override(self):
-        def del_st_ove(eureka_server):
-            url = eureka_server + "apps/%s/%s/status?lastDirtyTimestamp=%s" % \
-                (self.__instance["app"], self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"])
-
-            req = urllib2.Request(url)
-            req.get_method = lambda: "DELETE"
-            try:
-                response = urllib2.urlopen(req)
-                response.close()
-            except:
-                _logger.exception("error!")
-        self.__try_all_eureka_server(del_st_ove)
+        self.__try_all_eureka_server(lambda url: delete_status_override(
+            url, self.__instance["app"], self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"]))
 
     def start(self):
         _logger.debug("start to registry client...")
@@ -868,19 +858,18 @@ class DiscoveryClient:
                 return
             self.__merge_delta(delta)
             self.__delta = delta
-            if not self.__check_hash():
+            if not self.__is_hash_match():
                 self.__pull_full_registry()
         self.__try_all_eureka_server(do_fetch)
 
-    def __check_hash(self):
+    def __is_hash_match(self):
         app_hash = self.__get_applications_hash()
         _logger.debug("check hash, local[%s], remote[%s]" % (app_hash, self.__delta.appsHashcode))
         return app_hash == self.__delta.appsHashcode
 
     def __merge_delta(self, delta):
-        _logger.debug("merge delta...l::%d" % len(delta.applications))
+        _logger.debug("merge delta...length of application got from delta::%d" % len(delta.applications))
         for application in delta.applications:
-            _logger.debug("len::%d" % len(application.instances))
             for instance in application.instances:
                 _logger.debug("instance [%s] has %s" % (instance.instanceId, instance.actionType))
                 if instance.actionType in (ACTION_TYPE_ADDED, ACTION_TYPE_MODIFIED):
