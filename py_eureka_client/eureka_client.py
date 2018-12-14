@@ -12,6 +12,7 @@ except ImportError:
     import urllib.request as urllib2
 import random
 from threading import Timer
+from threading import Lock
 try:
     from urlparse import urlparse
 except ImportError:
@@ -77,6 +78,7 @@ class Applications:
         self.versions__delta = versions__delta
         self.__applications = applications if applications is not None else []
         self.__application_name_dic = {}
+        self.__app_lock = Lock()
 
     @property
     def appsHashcode(self):
@@ -91,14 +93,16 @@ class Applications:
         return self.versions__delta
 
     def add_application(self, application):
-        self.__applications.append(application)
-        self.__application_name_dic[application.name] = application
+        with self.__app_lock:
+            self.__applications.append(application)
+            self.__application_name_dic[application.name] = application
 
     def get_application(self, app_name):
-        if app_name in self.__application_name_dic:
-            return self.__application_name_dic[app_name]
-        else:
-            return Application(name=app_name)
+        with self.__app_lock:
+            if app_name in self.__application_name_dic:
+                return self.__application_name_dic[app_name]
+            else:
+                return Application(name=app_name)
 
 
 class Application:
@@ -109,51 +113,58 @@ class Application:
         self.name = name
         self.__instances = instances if instances is not None else []
         self.__instances_dict = {}
+        self.__inst_lock = Lock()
 
     @property
     def instances(self):
-        return self.__instances
+        with self.__inst_lock:
+            return self.__instances
 
     @property
     def up_instances(self):
-        up_inst = []
-        for item in self.__instances:
-            if item.status == INSTANCE_STATUS_UP:
-                up_inst.append(item)
-        return up_inst
+        with self.__inst_lock:
+            up_inst = []
+            for item in self.__instances:
+                if item.status == INSTANCE_STATUS_UP:
+                    up_inst.append(item)
+            return up_inst
 
     def get_instance(self, instance_id):
-        if instance_id in self.__instances_dict:
-            return self.__instances_dict[instance_id]
-        else:
-            return None
+        with self.__inst_lock:
+            if instance_id in self.__instances_dict:
+                return self.__instances_dict[instance_id]
+            else:
+                return None
 
     def add_instance(self, instance):
-        self.__instances.append(instance)
-        self.__instances_dict[instance.instanceId] = instance
+        with self.__inst_lock:
+            self.__instances.append(instance)
+            self.__instances_dict[instance.instanceId] = instance
 
     def update_instance(self, instance):
-        _logger.debug("update instance %s" % instance.instanceId)
-        updated = False
-        for idx in range(len(self.__instances)):
-            ele = self.__instances[idx]
-            if ele.instanceId == instance.instanceId:
-                _logger.debug("updating index %d" % idx)
-                self.__instances[idx] = instance
-                updated = True
-                break
+        with self.__inst_lock:
+            _logger.debug("update instance %s" % instance.instanceId)
+            updated = False
+            for idx in range(len(self.__instances)):
+                ele = self.__instances[idx]
+                if ele.instanceId == instance.instanceId:
+                    _logger.debug("updating index %d" % idx)
+                    self.__instances[idx] = instance
+                    updated = True
+                    break
 
-        if not updated:
-            self.add_instance(instance)
+            if not updated:
+                self.add_instance(instance)
 
     def remove_instance(self, instance):
-        for idx in range(len(self.__instances)):
-            ele = self.__instances[idx]
-            if ele.instanceId == instance.instanceId:
-                del self.__instances[idx]
-                break
-        if instance.instanceId in self.__instances_dict:
-            del self.__instances_dict[instance.instanceId]
+        with self.__inst_lock:
+            for idx in range(len(self.__instances)):
+                ele = self.__instances[idx]
+                if ele.instanceId == instance.instanceId:
+                    del self.__instances[idx]
+                    break
+            if instance.instanceId in self.__instances_dict:
+                del self.__instances_dict[instance.instanceId]
 
 
 class LeaseInfo:
@@ -608,27 +619,29 @@ class RegistryClient:
         self.__alive = False
         self.__heart_beat_timer = Timer(renewal_interval_in_secs, self.__heart_beat)
         self.__heart_beat_timer.daemon = True
+        self.__net_lock = Lock()
 
     def __try_all_eureka_server(self, fun):
-        untry_servers = self.__eureka_servers
-        tried_servers = []
-        ok = False
-        while len(untry_servers) > 0:
-            url = untry_servers[0].strip()
-            try:
-                fun(url)
-            except (urllib2.HTTPError, urllib2.URLError):
-                _logger.warn("Eureka server [%s] is down, use next url to try." % url)
-                tried_servers.append(url)
-                untry_servers = untry_servers[1:]
-            else:
-                ok = True
-                break
-        if len(tried_servers) > 0:
-            untry_servers.extend(tried_servers)
-            self.__eureka_servers = untry_servers
-        if not ok:
-            raise urllib2.URLError("All eureka servers are down!")
+        with self.__net_lock:
+            untry_servers = self.__eureka_servers
+            tried_servers = []
+            ok = False
+            while len(untry_servers) > 0:
+                url = untry_servers[0].strip()
+                try:
+                    fun(url)
+                except (urllib2.HTTPError, urllib2.URLError):
+                    _logger.warn("Eureka server [%s] is down, use next url to try." % url)
+                    tried_servers.append(url)
+                    untry_servers = untry_servers[1:]
+                else:
+                    ok = True
+                    break
+            if len(tried_servers) > 0:
+                untry_servers.extend(tried_servers)
+                self.__eureka_servers = untry_servers
+            if not ok:
+                raise urllib2.URLError("All eureka servers are down!")
 
     @staticmethod
     def __format_url(url, host, port, defalut_ctx=""):
@@ -734,6 +747,7 @@ class RegistryClient:
 
 
 __cache_registry_clients = {}
+__cache_registry_clients_lock = Lock()
 
 
 def init_registry_client(eureka_server="http://127.0.0.1:8761/eureka/",
@@ -756,36 +770,38 @@ def init_registry_client(eureka_server="http://127.0.0.1:8761/eureka/",
                          secure_vip_addr="",
                          is_coordinating_discovery_server=False,
                          key="default"):
-    assert key not in __cache_registry_clients, "There is already a client with the given key[#%s]" % key
-    client = RegistryClient(eureka_server=eureka_server,
-                            app_name=app_name,
-                            instance_id=instance_id,
-                            instance_host=instance_host,
-                            instance_ip=instance_ip,
-                            instance_port=instance_port,
-                            instance_unsecure_port_enabled=instance_unsecure_port_enabled,
-                            instance_secure_port=instance_secure_port,
-                            instance_secure_port_enabled=instance_secure_port_enabled,
-                            countryId=countryId,
-                            data_center_name=data_center_name,
-                            renewal_interval_in_secs=renewal_interval_in_secs,
-                            duration_in_secs=duration_in_secs,
-                            home_page_url=home_page_url,
-                            status_page_url=status_page_url,
-                            health_check_url=health_check_url,
-                            vip_adr=vip_adr,
-                            secure_vip_addr=secure_vip_addr,
-                            is_coordinating_discovery_server=is_coordinating_discovery_server)
-    __cache_registry_clients[key] = client
-    client.start()
-    return client
+    with __cache_registry_clients_lock:
+        assert key not in __cache_registry_clients, "There is already a client with the given key[#%s]" % key
+        client = RegistryClient(eureka_server=eureka_server,
+                                app_name=app_name,
+                                instance_id=instance_id,
+                                instance_host=instance_host,
+                                instance_ip=instance_ip,
+                                instance_port=instance_port,
+                                instance_unsecure_port_enabled=instance_unsecure_port_enabled,
+                                instance_secure_port=instance_secure_port,
+                                instance_secure_port_enabled=instance_secure_port_enabled,
+                                countryId=countryId,
+                                data_center_name=data_center_name,
+                                renewal_interval_in_secs=renewal_interval_in_secs,
+                                duration_in_secs=duration_in_secs,
+                                home_page_url=home_page_url,
+                                status_page_url=status_page_url,
+                                health_check_url=health_check_url,
+                                vip_adr=vip_adr,
+                                secure_vip_addr=secure_vip_addr,
+                                is_coordinating_discovery_server=is_coordinating_discovery_server)
+        __cache_registry_clients[key] = client
+        client.start()
+        return client
 
 
 def get_registry_client(key="default"):
-    if key in __cache_registry_clients:
-        return __cache_registry_clients[key]
-    else:
-        return None
+    with __cache_registry_clients_lock:
+        if key in __cache_registry_clients:
+            return __cache_registry_clients[key]
+        else:
+            return None
 
 
 """======================== Cached Discovery Client ============================"""
@@ -805,6 +821,8 @@ class DiscoveryClient:
         self.__ha_cache = {}
         self.__timer = Timer(self.__cache_time_in_secs, self.__heartbeat)
         self.__timer.daemon = True
+        self.__application_mth_lock = Lock()
+        self.__net_lock = Lock()
 
     def __heartbeat(self):
         self.__fetch_delta()
@@ -814,30 +832,32 @@ class DiscoveryClient:
 
     @property
     def applications(self):
-        if self.__applications is None:
-            self.__pull_full_registry()
-        return self.__applications
+        with self.__application_mth_lock:
+            if self.__applications is None:
+                self.__pull_full_registry()
+            return self.__applications
 
     def __try_all_eureka_server(self, fun):
-        untry_servers = self.__eureka_servers
-        tried_servers = []
-        ok = False
-        while len(untry_servers) > 0:
-            url = untry_servers[0].strip()
-            try:
-                fun(url)
-            except (urllib2.HTTPError, urllib2.URLError):
-                _logger.warn("Eureka server [%s] is down, use next url to try." % url)
-                tried_servers.append(url)
-                untry_servers = untry_servers[1:]
-            else:
-                ok = True
-                break
-        if len(tried_servers) > 0:
-            untry_servers.extend(tried_servers)
-            self.__eureka_servers = untry_servers
-        if not ok:
-            raise urllib2.URLError("All eureka servers are down!")
+        with self.__net_lock:
+            untry_servers = self.__eureka_servers
+            tried_servers = []
+            ok = False
+            while len(untry_servers) > 0:
+                url = untry_servers[0].strip()
+                try:
+                    fun(url)
+                except (urllib2.HTTPError, urllib2.URLError):
+                    _logger.warn("Eureka server [%s] is down, use next url to try." % url)
+                    tried_servers.append(url)
+                    untry_servers = untry_servers[1:]
+                else:
+                    ok = True
+                    break
+            if len(tried_servers) > 0:
+                untry_servers.extend(tried_servers)
+                self.__eureka_servers = untry_servers
+            if not ok:
+                raise urllib2.URLError("All eureka servers are down!")
 
     def __pull_full_registry(self):
         def do_pull(url):  # the actual function body
@@ -1025,21 +1045,24 @@ class DiscoveryClient:
 
 
 __cache_discovery_clients = {}
+__cache_discovery_clients_lock = Lock()
 
 
 def init_discovery_client(eureka_server, regions=[], cache_time_in_secs=30, ha_strategy=HA_STRATEGY_RANDOM, key="default"):
-    assert key not in __cache_discovery_clients, "There is already a client with the given key[#%s]" % key
-    cli = DiscoveryClient(eureka_server, regions=regions, cache_time_in_secs=cache_time_in_secs, ha_strategy=ha_strategy)
-    cli.start()
-    __cache_discovery_clients[key] = cli
-    return cli
+    with __cache_discovery_clients_lock:
+        assert key not in __cache_discovery_clients, "There is already a client with the given key[#%s]" % key
+        cli = DiscoveryClient(eureka_server, regions=regions, cache_time_in_secs=cache_time_in_secs, ha_strategy=ha_strategy)
+        cli.start()
+        __cache_discovery_clients[key] = cli
+        return cli
 
 
 def get_discovery_client(key="default"):
-    if key in __cache_discovery_clients:
-        return __cache_discovery_clients[key]
-    else:
-        return None
+    with __cache_discovery_clients_lock:
+        if key in __cache_discovery_clients:
+            return __cache_discovery_clients[key]
+        else:
+            return None
 
 
 @atexit.register
@@ -1048,4 +1071,9 @@ def _cleanup_before_exist():
         _logger.debug("cleaning up registry clients")
         for k, cli in __cache_registry_clients.items():
             _logger.debug("try to stop cache registry client [%s] this will also unregister this client from the eureka server" % k)
+            cli.stop()
+    if len(__cache_discovery_clients) > 0:
+        _logger.debug("cleaning up discovery clients")
+        for k, cli in __cache_discovery_clients.items():
+            _logger.debug("try to stop cache discovery client [%s] this will also unregister this client from the eureka server" % k)
             cli.stop()
