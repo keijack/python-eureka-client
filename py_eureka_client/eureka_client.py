@@ -7,16 +7,16 @@ import re
 import socket
 import time
 try:
-    import urllib2
-except ImportError:
     import urllib.request as urllib2
+except ImportError:
+    import urllib2
 import random
 from threading import Timer
 from threading import Lock
 try:
-    from urlparse import urlparse
-except ImportError:
     from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
 import xml.etree.ElementTree as ElementTree
 
 from py_eureka_client.__logger__ import getLogger
@@ -562,6 +562,7 @@ class RegistryClient:
         assert app_name is not None and app_name != "", "application name must be specified."
         assert instance_port > 0, "port is unvalid"
 
+        self.__net_lock = Lock()
         self.__eureka_servers = eureka_server.split(",")
 
         def try_to_get_client_ip(url):
@@ -619,7 +620,6 @@ class RegistryClient:
         self.__alive = False
         self.__heart_beat_timer = Timer(renewal_interval_in_secs, self.__heart_beat)
         self.__heart_beat_timer.daemon = True
-        self.__net_lock = Lock()
 
     def __try_all_eureka_server(self, fun):
         with self.__net_lock:
@@ -655,7 +655,6 @@ class RegistryClient:
         else:
             _url = 'http://%s:%d/%s' % (host, port, defalut_ctx)
         return _url
-
     @staticmethod
     def __is_ip(ip_str):
         return re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', ip_str)
@@ -665,18 +664,21 @@ class RegistryClient:
         _target_ = eureka_server
         if not _target_.endswith('/'):
             _target_ += '/'
-        re_result = re.findall(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?:\:\d+){0,1})\/', _target_)
-        _target_ = re_result[0]
-        if _target_.index(':') > 0:
+        url_obj = urlparse(_target_)
+        _target_ = url_obj.netloc
+        _logger.debug("target eureka host::: %s" % _target_)        
+        if _target_.find(':') > 0:
             arr = _target_.split(':')
             target_ip = arr[0]
             target_port = int(arr[1])
         else:
             target_ip = _target_
-            if eureka_server.startswith('http://'):
+            if url_obj.scheme == "http":
                 target_port = 80
-            else:
+            elif url_obj.scheme == "https":
                 target_port = 443
+            else:
+                raise Exception("Cannot parse your eureka url! ")
 
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect((target_ip, target_port))
