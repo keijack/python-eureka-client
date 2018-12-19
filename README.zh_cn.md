@@ -101,3 +101,30 @@ eureka_server_list = "http://your-eureka-server-peer1,http://your-eureka-server-
 # 使用 stick 策略
 eureka_client.init_discovery_client(eureka_server_list, ha_strategy=eureka_client.HA_STRATEGY_STICK)
 ```
+
+## 例子
+
+这是使用注册和发现机制的例子：
+
+初始化文件代码大致如下：
+
+```python
+import py_eureka_client.eureka_client as eureka_client
+
+eureka_server_list = "http://your-eureka-server-peer1,http://your-eureka-server-peer2"
+your_rest_server_port = 9090
+# The flowing code will register your server to eureka server and also start to send heartbeat every 30 seconds
+eureka_client.init_registry_client(eureka_server=eureka_server_list,
+                                app_name="your_app_name",
+                                instance_port=your_rest_server_port)
+eureka_client.init_discovery_client(eureka_server_list)
+```
+
+在你的业务代码中使用别的服务：
+
+```python
+import py_eureka_client.eureka_client as eureka_client
+
+res = eureka_client.do_service("OTHER-SERVICE-NAME", "/service/context/path")
+print("result of other service" + res)
+```
