@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="py_eureka_client",
-    version="0.1.1",
+    version="0.2.0",
     author="Keijack",
     author_email="keijack.wu@gmail.com",
     description="An eureka client written in python, you can easily intergrate your python components with spring cloud.",

@@ -28,7 +28,7 @@ pip install py_eureka_client
 
 ### Rister your python REST server to eureka server
 
-```python
+```Python
 import py_eureka_client.eureka_client as eureka_client
 
 your_rest_server_port = 9090
@@ -36,7 +36,6 @@ your_rest_server_port = 9090
 eureka_client.init_registry_client(eureka_server="http://your-eureka-server-peer1,http://your-eureka-server-peer2",
                                 app_name="your_app_name",
                                 instance_port=your_rest_server_port)
-
 ```
 
 *If you do not specify your host and ip just like the example above, the client will choose one that could connect to eureka server.*
@@ -56,8 +55,7 @@ Then, in your business code, use
 ```python
 import py_eureka_client.eureka_client as eureka_client
 
-cli = eureka_client.get_discovery_client()
-res = cli.do_service("OTHER-SERVICE-NAME", "/service/context/path")
+res = eureka_client.do_service("OTHER-SERVICE-NAME", "/service/context/path")
 print("result of other service" + res)
 
 ```

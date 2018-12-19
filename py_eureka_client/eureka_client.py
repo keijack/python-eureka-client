@@ -655,6 +655,7 @@ class RegistryClient:
         else:
             _url = 'http://%s:%d/%s' % (host, port, defalut_ctx)
         return _url
+
     @staticmethod
     def __is_ip(ip_str):
         return re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', ip_str)
@@ -666,7 +667,7 @@ class RegistryClient:
             _target_ += '/'
         url_obj = urlparse(_target_)
         _target_ = url_obj.netloc
-        _logger.debug("target eureka host::: %s" % _target_)        
+        _logger.debug("target eureka host::: %s" % _target_)
         if _target_.find(':') > 0:
             arr = _target_.split(':')
             target_ip = arr[0]
@@ -1065,6 +1066,23 @@ def get_discovery_client(key="default"):
             return __cache_discovery_clients[key]
         else:
             return None
+
+
+def do_service(application_name, service, return_type="string",
+               prefer_ip=False, prefer_https=False,
+               method="GET", headers=None,
+               data=None, timeout=_DEFAULT_TIME_OUT,
+               cafile=None, capath=None, cadefault=False, context=None, key="default"):
+    cli = get_discovery_client(key)
+    if cli is None:
+        k = "" if key is None or key == "default" else " [%s]" % key
+        raise Exception("Discovery Client%s has not initialized. " % k)
+    return cli.do_service(application_name, service, return_type=return_type,
+                   prefer_ip=prefer_ip, prefer_https=prefer_https,
+                   method=method, headers=headers,
+                   data=data, timeout=timeout,
+                   cafile=cafile, capath=capath,
+                   cadefault=cadefault, context=context)
 
 
 @atexit.register
