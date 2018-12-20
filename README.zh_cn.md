@@ -132,7 +132,7 @@ do_service 方法支持 HA（高可用），该方法会尝试所有从 ereka �
 * HA_STRATEGY_STICK, 随机取得一个节点之后一直使用该节点，直至这个节点被删除或者状态设为 DOWN。
 * HA_STRATEGY_OTHER, 总是使用和上次不同的节点。
 
-如果你需要修改这些策略，你可以初始化发现服务时指定响应的策略：
+如果你需要修改这些策略，你可以初始化发现服务时指定相应的策略：
 
 ```python
 import py_eureka_client.eureka_client as eureka_client
