@@ -55,7 +55,7 @@ eureka_client.init(eureka_server="http://your-eureka-server-peer1,http://your-eu
 ```python
 import py_eureka_client.eureka_client as eureka_client
 
-res = eureka_client.do_service("OTHER-SERVICE-NAME", "/service/context/path"，
+res = eureka_client.do_service("OTHER-SERVICE-NAME", "/service/context/path",
                                # 返回类型，默认为 `string`，可以传入 `json`，如果传入值是 `json`，那么该方法会返回一个 `dict` 对象
                                return_type="string")
 print("result of other service" + res)
