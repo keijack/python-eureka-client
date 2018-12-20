@@ -27,7 +27,45 @@ Python 2.7 / 3.6+ (3.5 也应该支持，但未测试)
 pip install py_eureka_client
 ```
 
-### 注册服务
+### 推荐使用
+
+通过以下代码，你可以同时使用注册以及发现服务：
+
+```python
+import py_eureka_client.eureka_client as eureka_client
+
+your_rest_server_host = "192.168.10.106"
+your_rest_server_port = 9090
+# The flowing code will register your server to eureka server and also start to send heartbeat every 30 seconds
+eureka_client.init(eureka_server="http://your-eureka-server-peer1,http://your-eureka-server-peer2",
+                   app_name="your_app_name",
+                   # 当前组件的主机名，可选参数，如果不填写会自动计算一个，如果服务和 eureka 服务器部署在同一台机器，请必须填写，否则会计算出 127.0.0.1
+                   instance_host=your_rest_server_host,
+                   instance_port=your_rest_server_port,
+                   # 调用其他服务时的高可用策略，可选，默认为随机
+                   ha_strategy=eureka_client.HA_STRATEGY_RANDOM)
+```
+
+*上述接口还支持更多的参数，请参考源代码，这个参数的大部分`Instance`对象的参数，参考以下`仅注册服务`的相关说明。*
+
+*`ha_stratergy`参数中所需要的更多策略请参考以下`仅发现服务`的相关说明。*
+
+在你的业务代码中，通过以下的方法调用其他组件的服务
+
+```python
+import py_eureka_client.eureka_client as eureka_client
+
+res = eureka_client.do_service("OTHER-SERVICE-NAME", "/service/context/path"，
+                               # 返回类型，默认为 `string`，可以传入 `json`，如果传入值是 `json`，那么该方法会返回一个 `dict` 对象
+                               return_type="string")
+print("result of other service" + res)
+```
+
+这个方法还接受其他的参数，剩余的参数和 `urllib2.urlopen` 接口一致。请参考相关的接口或者源代码进行传入。
+
+### 仅注册服务
+
+如果你的组件仅提供服务，不需要发现其他的组件，那么你可以仅将你的组件注册到 eureka 服务中而无需初始化发现服务。
 
 ```Python
 import py_eureka_client.eureka_client as eureka_client
@@ -58,9 +96,9 @@ eureka_client.init_registry_client(eureka_server="http://your-eureka-server-peer
 
 *请注意，如果你将 python 组件和 eureka 服务器部署在一起，计算出来的 ip 会是 `127.0.0.1`，因此在这种情况下，为了保证其他组件能够访问你的组件，请必须指定`instance_host`或者`instance_ip`字段。*
 
-### 发现服务
+### 仅发现服务
 
-由于发现服务和注册服务是分开的，所以在全局配置好注册服务之后，你还需要使用以下的方法来配置你的发现服务，这个动作你仅需要操作一次。
+如果你的服务不对外提供服务，但是却需要调用其他组件的服务，同时也不需要让 eureka 管理组件状态，那么你可以仅使用发现服务，代码如下：
 
 ```python
 import py_eureka_client.eureka_client as eureka_client
@@ -84,6 +122,8 @@ print("result of other service" + res)
 
 这个方法还接受其他的参数，剩余的参数和 `urllib2.urlopen` 接口一致。请参考相关的接口或者源代码进行传入。
 
+### 高可用
+
 do_service 方法支持 HA（高可用），该方法会尝试所有从 ereka 服务器取得的节点，直至其中一个节点返回数据，或者所有的节点都尝试失败。
 
 该方法有几种 HA 的策略，这些策略分别是：
@@ -98,33 +138,12 @@ do_service 方法支持 HA（高可用），该方法会尝试所有从 ereka �
 import py_eureka_client.eureka_client as eureka_client
 
 eureka_server_list = "http://your-eureka-server-peer1,http://your-eureka-server-peer2"
-# 使用 stick 策略
+
+# 统一注册接口
+eureka_client.init(eureka_server=eureka_server_list,
+                   app_name="your_app_name",
+                   instance_port=9090,
+                   ha_strategy=eureka_client.HA_STRATEGY_OTHER)
+# 仅发现服务接口
 eureka_client.init_discovery_client(eureka_server_list, ha_strategy=eureka_client.HA_STRATEGY_STICK)
-```
-
-## 例子
-
-这是使用注册和发现机制的例子：
-
-初始化文件代码大致如下：
-
-```python
-import py_eureka_client.eureka_client as eureka_client
-
-eureka_server_list = "http://your-eureka-server-peer1,http://your-eureka-server-peer2"
-your_rest_server_port = 9090
-# The flowing code will register your server to eureka server and also start to send heartbeat every 30 seconds
-eureka_client.init_registry_client(eureka_server=eureka_server_list,
-                                app_name="your_app_name",
-                                instance_port=your_rest_server_port)
-eureka_client.init_discovery_client(eureka_server_list)
-```
-
-在你的业务代码中使用别的服务：
-
-```python
-import py_eureka_client.eureka_client as eureka_client
-
-res = eureka_client.do_service("OTHER-SERVICE-NAME", "/service/context/path")
-print("result of other service" + res)
 ```

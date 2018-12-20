@@ -813,11 +813,11 @@ def get_registry_client(key="default"):
 class DiscoveryClient:
     """Discover the apps registered in spring cloud server, this class will do some cached, if you want to get the apps immediatly, use the global functions"""
 
-    def __init__(self, eureka_server, regions=None, cache_time_in_secs=30, ha_strategy=HA_STRATEGY_RANDOM):
+    def __init__(self, eureka_server, regions=None, renewal_interval_in_secs=30, ha_strategy=HA_STRATEGY_RANDOM):
         assert ha_strategy in [HA_STRATEGY_RANDOM, HA_STRATEGY_STICK, HA_STRATEGY_OTHER], "do not support strategy %d " % ha_strategy
         self.__eureka_servers = eureka_server.split(",")
         self.__regions = regions if regions is not None else []
-        self.__cache_time_in_secs = cache_time_in_secs
+        self.__cache_time_in_secs = renewal_interval_in_secs
         self.__applications = None
         self.__delta = None
         self.__ha_strategy = ha_strategy
@@ -1051,10 +1051,10 @@ __cache_discovery_clients = {}
 __cache_discovery_clients_lock = Lock()
 
 
-def init_discovery_client(eureka_server, regions=[], cache_time_in_secs=30, ha_strategy=HA_STRATEGY_RANDOM, key="default"):
+def init_discovery_client(eureka_server="http://127.0.0.1:8761/eureka/", regions=[], renewal_interval_in_secs=30, ha_strategy=HA_STRATEGY_RANDOM, key="default"):
     with __cache_discovery_clients_lock:
         assert key not in __cache_discovery_clients, "There is already a client with the given key[#%s]" % key
-        cli = DiscoveryClient(eureka_server, regions=regions, cache_time_in_secs=cache_time_in_secs, ha_strategy=ha_strategy)
+        cli = DiscoveryClient(eureka_server, regions=regions, renewal_interval_in_secs=renewal_interval_in_secs, ha_strategy=ha_strategy)
         cli.start()
         __cache_discovery_clients[key] = cli
         return cli
@@ -1068,6 +1068,56 @@ def get_discovery_client(key="default"):
             return None
 
 
+def init(eureka_server="http://127.0.0.1:8761/eureka/",
+         regions=[],
+         app_name="",
+         instance_id="",
+         instance_host="",
+         instance_ip="",
+         instance_port=9090,
+         instance_unsecure_port_enabled=True,
+         instance_secure_port=9443,
+         instance_secure_port_enabled=False,
+         countryId=1,  # @deprecaded
+         data_center_name="MyOwn",  # Netflix, Amazon, MyOwn
+         renewal_interval_in_secs=30,
+         duration_in_secs=90,
+         home_page_url="",
+         status_page_url="",
+         health_check_url="",
+         vip_adr="",
+         secure_vip_addr="",
+         is_coordinating_discovery_server=False,
+         ha_strategy=HA_STRATEGY_RANDOM,
+         key="default"):
+    registry_client = init_registry_client(eureka_server=eureka_server,
+                                           app_name=app_name,
+                                           instance_id=instance_id,
+                                           instance_host=instance_host,
+                                           instance_ip=instance_ip,
+                                           instance_port=instance_port,
+                                           instance_unsecure_port_enabled=instance_unsecure_port_enabled,
+                                           instance_secure_port=instance_secure_port,
+                                           instance_secure_port_enabled=instance_secure_port_enabled,
+                                           countryId=countryId,
+                                           data_center_name=data_center_name,
+                                           renewal_interval_in_secs=renewal_interval_in_secs,
+                                           duration_in_secs=duration_in_secs,
+                                           home_page_url=home_page_url,
+                                           status_page_url=status_page_url,
+                                           health_check_url=health_check_url,
+                                           vip_adr=vip_adr,
+                                           secure_vip_addr=secure_vip_addr,
+                                           is_coordinating_discovery_server=is_coordinating_discovery_server,
+                                           key=key)
+    discovery_client = init_discovery_client(eureka_server,
+                                             regions=regions,
+                                             renewal_interval_in_secs=renewal_interval_in_secs,
+                                             ha_strategy=ha_strategy,
+                                             key=key)
+    return registry_client, discovery_client
+
+
 def do_service(application_name, service, return_type="string",
                prefer_ip=False, prefer_https=False,
                method="GET", headers=None,
@@ -1078,11 +1128,11 @@ def do_service(application_name, service, return_type="string",
         k = "" if key is None or key == "default" else " [%s]" % key
         raise Exception("Discovery Client%s has not initialized. " % k)
     return cli.do_service(application_name, service, return_type=return_type,
-                   prefer_ip=prefer_ip, prefer_https=prefer_https,
-                   method=method, headers=headers,
-                   data=data, timeout=timeout,
-                   cafile=cafile, capath=capath,
-                   cadefault=cadefault, context=context)
+                          prefer_ip=prefer_ip, prefer_https=prefer_https,
+                          method=method, headers=headers,
+                          data=data, timeout=timeout,
+                          cafile=cafile, capath=capath,
+                          cadefault=cadefault, context=context)
 
 
 @atexit.register
