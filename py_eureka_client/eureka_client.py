@@ -6,18 +6,20 @@ import os
 import re
 import socket
 import time
+import random
+import inspect
+import xml.etree.ElementTree as ElementTree
+from threading import Timer
+from threading import Lock
+from threading import Thread
 try:
     import urllib.request as urllib2
 except ImportError:
     import urllib2
-import random
-from threading import Timer
-from threading import Lock
 try:
     from urllib.parse import urlparse
 except ImportError:
     from urlparse import urlparse
-import xml.etree.ElementTree as ElementTree
 
 from py_eureka_client.__logger__ import getLogger
 
@@ -800,6 +802,7 @@ def init_registry_client(eureka_server="http://127.0.0.1:8761/eureka/",
 
 
 def get_registry_client(key="default"):
+    # type (str) -> RegistryClient
     with __cache_registry_clients_lock:
         if key in __cache_registry_clients:
             return __cache_registry_clients[key]
@@ -921,13 +924,25 @@ class DiscoveryClient:
             app_hash = app_hash + "%s_%d_" % (item[0], item[1])
         return app_hash
 
-    def do_service(self, application_name, service, return_type="string",
-                   prefer_ip=False, prefer_https=False,
-                   method="GET", headers=None,
-                   data=None, timeout=_DEFAULT_TIME_OUT,
-                   cafile=None, capath=None, cadefault=False, context=None):
+    def walk_nodes_async(self, app_name="", service="", prefer_ip=False, prefer_https=False, walker=None, on_success=None, on_error=None):
+        def async_thread_target():
+            try:
+                res = self.walk_nodes(app_name=app_name, service=service, prefer_ip=prefer_ip, prefer_https=prefer_https, walker=walker)
+                if on_success is not None and (inspect.isfunction(on_success) or inspect.ismethod(on_success)):
+                    on_success(res)
+            except (urllib2.HTTPError, urllib2.URLError) as e:
+                if on_error is not None and (inspect.isfunction(on_error) or inspect.ismethod(on_error)):
+                    on_error(e)
+
+        async_thread = Thread(target=async_thread_target)
+        async_thread.daemon = True
+        async_thread.start()
+
+    def walk_nodes(self, app_name="", service="", prefer_ip=False, prefer_https=False, walker=None):
+        assert app_name is not None and app_name != "", "application_name should not be null"
+        assert inspect.isfunction(walker) or inspect.ismethod(walker), "walker must be a method or function"
         error_nodes = []
-        app_name = application_name.upper()
+        app_name = app_name.upper()
         node = self.__get_availabe_service(app_name)
 
         while node is not None:
@@ -938,25 +953,59 @@ class DiscoveryClient:
                 else:
                     url = url + service
                 _logger.debug("service url::" + url)
-                req = urllib2.Request(url)
-                req.get_method = lambda: method
-                heads = headers if headers is not None else {}
-                for k, v in heads.items():
-                    req.add_header(k, v)
-
-                response = urllib2.urlopen(req, data=data, timeout=timeout, cafile=cafile, capath=capath, cadefault=cadefault, context=context)
-                res_txt = response.read().decode("utf-8")
-                response.close()
-                if return_type.lower() in ("json", "dict", "dictionary"):
-                    return json.loads(res_txt)
-                else:
-                    return res_txt
+                return walker(url)
             except (urllib2.HTTPError, urllib2.URLError):
                 _logger.warn("do service %s in node [%s] error, use next node." % (service, node.instanceId))
                 error_nodes.append(node.instanceId)
                 node = self.__get_availabe_service(app_name, error_nodes)
 
         raise urllib2.URLError("Try all up instances in registry, but all fail")
+
+    def do_service_async(self, app_name="", service="", return_type="string",
+                         prefer_ip=False, prefer_https=False,
+                         on_success=None, on_error=None,
+                         method="GET", headers=None,
+                         data=None, timeout=_DEFAULT_TIME_OUT,
+                         cafile=None, capath=None, cadefault=False, context=None):
+        def async_thread_target():
+            try:
+                res = self.do_service(app_name=app_name,
+                                      service=service, return_type=return_type,
+                                      prefer_ip=prefer_ip, prefer_https=prefer_https,
+                                      method=method, headers=headers,
+                                      data=data, timeout=timeout,
+                                      cafile=cafile, capath=capath,
+                                      cadefault=cadefault, context=context)
+                if on_success is not None and (inspect.isfunction(on_success) or inspect.ismethod(on_success)):
+                    on_success(res)
+            except (urllib2.HTTPError, urllib2.URLError) as e:
+                if on_error is not None and (inspect.isfunction(on_error) or inspect.ismethod(on_error)):
+                    on_error(e)
+
+        async_thread = Thread(target=async_thread_target)
+        async_thread.daemon = True
+        async_thread.start()
+
+    def do_service(self, app_name="", service="", return_type="string",
+                   prefer_ip=False, prefer_https=False,
+                   method="GET", headers=None,
+                   data=None, timeout=_DEFAULT_TIME_OUT,
+                   cafile=None, capath=None, cadefault=False, context=None):
+        def walk_using_urllib(url):
+            req = urllib2.Request(url)
+            req.get_method = lambda: method
+            heads = headers if headers is not None else {}
+            for k, v in heads.items():
+                req.add_header(k, v)
+
+            response = urllib2.urlopen(req, data=data, timeout=timeout, cafile=cafile, capath=capath, cadefault=cadefault, context=context)
+            res_txt = response.read().decode("utf-8")
+            response.close()
+            if return_type.lower() in ("json", "dict", "dictionary"):
+                return json.loads(res_txt)
+            else:
+                return res_txt
+        return self.walk_nodes(app_name, service, prefer_ip, prefer_https, walk_using_urllib)
 
     def __get_availabe_service(self, application_name, ignore_instance_ids=None):
         app = self.applications.get_application(application_name)
@@ -1061,6 +1110,7 @@ def init_discovery_client(eureka_server="http://127.0.0.1:8761/eureka/", regions
 
 
 def get_discovery_client(key="default"):
+    # type: (str) -> DiscoveryClient
     with __cache_discovery_clients_lock:
         if key in __cache_discovery_clients:
             return __cache_discovery_clients[key]
@@ -1133,6 +1183,15 @@ def do_service(application_name, service, return_type="string",
                           data=data, timeout=timeout,
                           cafile=cafile, capath=capath,
                           cadefault=cadefault, context=context)
+
+
+def stop(key="default"):
+    register_cli = get_registry_client(key)
+    if register_cli is not None:
+        register_cli.stop()
+    discovery_client = get_discovery_client(key)
+    if discovery_client is not None:
+        discovery_client.stop()
 
 
 @atexit.register
