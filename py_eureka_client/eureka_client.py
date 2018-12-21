@@ -751,6 +751,7 @@ class RegistryClient:
         self.__heart_beat_timer.start()
 
 
+__cache_key = "default"
 __cache_registry_clients = {}
 __cache_registry_clients_lock = Lock()
 
@@ -773,10 +774,8 @@ def init_registry_client(eureka_server="http://127.0.0.1:8761/eureka/",
                          health_check_url="",
                          vip_adr="",
                          secure_vip_addr="",
-                         is_coordinating_discovery_server=False,
-                         key="default"):
+                         is_coordinating_discovery_server=False):
     with __cache_registry_clients_lock:
-        assert key not in __cache_registry_clients, "There is already a client with the given key[#%s]" % key
         client = RegistryClient(eureka_server=eureka_server,
                                 app_name=app_name,
                                 instance_id=instance_id,
@@ -796,16 +795,16 @@ def init_registry_client(eureka_server="http://127.0.0.1:8761/eureka/",
                                 vip_adr=vip_adr,
                                 secure_vip_addr=secure_vip_addr,
                                 is_coordinating_discovery_server=is_coordinating_discovery_server)
-        __cache_registry_clients[key] = client
+        __cache_registry_clients[__cache_key] = client
         client.start()
         return client
 
 
-def get_registry_client(key="default"):
+def get_registry_client():
     # type (str) -> RegistryClient
     with __cache_registry_clients_lock:
-        if key in __cache_registry_clients:
-            return __cache_registry_clients[key]
+        if __cache_key in __cache_registry_clients:
+            return __cache_registry_clients[__cache_key]
         else:
             return None
 
@@ -919,7 +918,7 @@ class DiscoveryClient:
                     app_status_count[instance.status.upper()] = 0
                 app_status_count[instance.status.upper()] = app_status_count[instance.status.upper()] + 1
 
-        sorted_app_status_count = sorted(app_status_count.items(), key=lambda item: item[0])
+        sorted_app_status_count = sorted(app_status_count.items(), __cache_key=lambda item: item[0])
         for item in sorted_app_status_count:
             app_hash = app_hash + "%s_%d_" % (item[0], item[1])
         return app_hash
@@ -930,7 +929,7 @@ class DiscoveryClient:
                 res = self.walk_nodes(app_name=app_name, service=service, prefer_ip=prefer_ip, prefer_https=prefer_https, walker=walker)
                 if on_success is not None and (inspect.isfunction(on_success) or inspect.ismethod(on_success)):
                     on_success(res)
-            except (urllib2.HTTPError, urllib2.URLError) as e:
+            except urllib2.HTTPError as e:
                 if on_error is not None and (inspect.isfunction(on_error) or inspect.ismethod(on_error)):
                     on_error(e)
 
@@ -959,7 +958,7 @@ class DiscoveryClient:
                 error_nodes.append(node.instanceId)
                 node = self.__get_availabe_service(app_name, error_nodes)
 
-        raise urllib2.URLError("Try all up instances in registry, but all fail")
+        raise urllib2.HTTPError("Try all up instances in registry, but all fail")
 
     def do_service_async(self, app_name="", service="", return_type="string",
                          prefer_ip=False, prefer_https=False,
@@ -978,7 +977,7 @@ class DiscoveryClient:
                                       cadefault=cadefault, context=context)
                 if on_success is not None and (inspect.isfunction(on_success) or inspect.ismethod(on_success)):
                     on_success(res)
-            except (urllib2.HTTPError, urllib2.URLError) as e:
+            except urllib2.HTTPError as e:
                 if on_error is not None and (inspect.isfunction(on_error) or inspect.ismethod(on_error)):
                     on_error(e)
 
@@ -1100,20 +1099,20 @@ __cache_discovery_clients = {}
 __cache_discovery_clients_lock = Lock()
 
 
-def init_discovery_client(eureka_server="http://127.0.0.1:8761/eureka/", regions=[], renewal_interval_in_secs=30, ha_strategy=HA_STRATEGY_RANDOM, key="default"):
+def init_discovery_client(eureka_server="http://127.0.0.1:8761/eureka/", regions=[], renewal_interval_in_secs=30, ha_strategy=HA_STRATEGY_RANDOM):
     with __cache_discovery_clients_lock:
-        assert key not in __cache_discovery_clients, "There is already a client with the given key[#%s]" % key
+        assert __cache_key not in __cache_discovery_clients, "Client has already been initialized."
         cli = DiscoveryClient(eureka_server, regions=regions, renewal_interval_in_secs=renewal_interval_in_secs, ha_strategy=ha_strategy)
         cli.start()
-        __cache_discovery_clients[key] = cli
+        __cache_discovery_clients[__cache_key] = cli
         return cli
 
 
-def get_discovery_client(key="default"):
+def get_discovery_client():
     # type: (str) -> DiscoveryClient
     with __cache_discovery_clients_lock:
-        if key in __cache_discovery_clients:
-            return __cache_discovery_clients[key]
+        if __cache_key in __cache_discovery_clients:
+            return __cache_discovery_clients[__cache_key]
         else:
             return None
 
@@ -1138,8 +1137,7 @@ def init(eureka_server="http://127.0.0.1:8761/eureka/",
          vip_adr="",
          secure_vip_addr="",
          is_coordinating_discovery_server=False,
-         ha_strategy=HA_STRATEGY_RANDOM,
-         key="default"):
+         ha_strategy=HA_STRATEGY_RANDOM):
     registry_client = init_registry_client(eureka_server=eureka_server,
                                            app_name=app_name,
                                            instance_id=instance_id,
@@ -1158,26 +1156,58 @@ def init(eureka_server="http://127.0.0.1:8761/eureka/",
                                            health_check_url=health_check_url,
                                            vip_adr=vip_adr,
                                            secure_vip_addr=secure_vip_addr,
-                                           is_coordinating_discovery_server=is_coordinating_discovery_server,
-                                           key=key)
+                                           is_coordinating_discovery_server=is_coordinating_discovery_server)
     discovery_client = init_discovery_client(eureka_server,
                                              regions=regions,
                                              renewal_interval_in_secs=renewal_interval_in_secs,
-                                             ha_strategy=ha_strategy,
-                                             key=key)
+                                             ha_strategy=ha_strategy)
     return registry_client, discovery_client
 
 
-def do_service(application_name, service, return_type="string",
+def walk_nodes_async(app_name="", service="", prefer_ip=False, prefer_https=False, walker=None, on_success=None, on_error=None):
+    cli = get_discovery_client()
+    if cli is None:
+        raise Exception("Discovery Client has not initialized. ")
+    cli.walk_nodes_async(app_name=app_name, service=service,
+                         prefer_ip=prefer_ip, prefer_https=prefer_https,
+                         walker=walker, on_success=on_success, on_error=on_error)
+
+
+def walk_nodes(app_name="", service="", prefer_ip=False, prefer_https=False, walker=None):
+    cli = get_discovery_client()
+    if cli is None:
+        raise Exception("Discovery Client has not initialized. ")
+    return cli.walk_nodes(app_name=app_name, service=service,
+                          prefer_ip=prefer_ip, prefer_https=prefer_https, walker=walker)
+
+
+def do_service_async(app_name="", service="", return_type="string",
+                     prefer_ip=False, prefer_https=False,
+                     on_success=None, on_error=None,
+                     method="GET", headers=None,
+                     data=None, timeout=_DEFAULT_TIME_OUT,
+                     cafile=None, capath=None, cadefault=False, context=None):
+    cli = get_discovery_client()
+    if cli is None:
+        raise Exception("Discovery Client has not initialized. ")
+    cli.do_service_async(app_name=app_name, service=service, return_type=return_type,
+                         prefer_ip=prefer_ip, prefer_https=prefer_https,
+                         on_success=on_success, on_error=on_error,
+                         method=method, headers=headers,
+                         data=data, timeout=timeout,
+                         cafile=cafile, capath=capath,
+                         cadefault=cadefault, context=context)
+
+
+def do_service(app_name="", service="", return_type="string",
                prefer_ip=False, prefer_https=False,
                method="GET", headers=None,
                data=None, timeout=_DEFAULT_TIME_OUT,
-               cafile=None, capath=None, cadefault=False, context=None, key="default"):
-    cli = get_discovery_client(key)
+               cafile=None, capath=None, cadefault=False, context=None):
+    cli = get_discovery_client()
     if cli is None:
-        k = "" if key is None or key == "default" else " [%s]" % key
-        raise Exception("Discovery Client%s has not initialized. " % k)
-    return cli.do_service(application_name, service, return_type=return_type,
+        raise Exception("Discovery Client has not initialized. ")
+    return cli.do_service(app_name=app_name, service=service, return_type=return_type,
                           prefer_ip=prefer_ip, prefer_https=prefer_https,
                           method=method, headers=headers,
                           data=data, timeout=timeout,
@@ -1185,11 +1215,11 @@ def do_service(application_name, service, return_type="string",
                           cadefault=cadefault, context=context)
 
 
-def stop(key="default"):
-    register_cli = get_registry_client(key)
+def stop():
+    register_cli = get_registry_client()
     if register_cli is not None:
         register_cli.stop()
-    discovery_client = get_discovery_client(key)
+    discovery_client = get_discovery_client()
     if discovery_client is not None:
         discovery_client.stop()
 
