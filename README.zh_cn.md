@@ -61,7 +61,7 @@ res = eureka_client.do_service("OTHER-SERVICE-NAME", "/service/context/path",
 print("result of other service" + res)
 ```
 
-这个方法还接受其他的参数，剩余的参数和 `urllib2.urlopen` 接口一致。请参考相关的接口或者源代码进行传入。
+*更多使用发现服务的方法，请参照`使用发现服务`章节。*
 
 ### 仅注册服务
 
@@ -96,7 +96,7 @@ eureka_client.init_registry_client(eureka_server="http://your-eureka-server-peer
 
 *请注意，如果你将 python 组件和 eureka 服务器部署在一起，计算出来的 ip 会是 `127.0.0.1`，因此在这种情况下，为了保证其他组件能够访问你的组件，请必须指定`instance_host`或者`instance_ip`字段。*
 
-### 仅发现服务
+### 发现服务
 
 如果你的服务不对外提供服务，但是却需要调用其他组件的服务，同时也不需要让 eureka 管理组件状态，那么你可以仅使用发现服务，代码如下：
 
@@ -108,23 +108,91 @@ eureka_server_list = "http://your-eureka-server-peer1,http://your-eureka-server-
 eureka_client.init_discovery_client(eureka_server_list)
 ```
 
-之后，在你需要调用其他服务的业务代码中，使用以下的代码来获取服务：
+无论你使用`init`还是`init_discovery_client`，初始化了发现服务之后，你就能通过以下方法来调用其他组件了。
+
+最简单的调用方式是：
 
 ```python
 import py_eureka_client.eureka_client as eureka_client
 
-res = eureka_client.do_service("OTHER-SERVICE-NAME", "/service/context/path", return_type="string")
-print("result of other service" + res)
-
+try:
+    res = eureka_client.do_service("OTHER-SERVICE-NAME", "/service/context/path", return_type="string")
+    print("result of other service" + res)
+except urllib.request.HTTPError as e:
+    # If all nodes are down, a `HTTPError` will raise.
+    print(e)
 ```
 
 上述参数中，return_type 可以选择传入`json`，如果传入`json`，则该接口返回一个 `dict` 对象。该参数也可不传入，默认返回为 `str`。
 
-这个方法还接受其他的参数，剩余的参数和 `urllib2.urlopen` 接口一致。请参考相关的接口或者源代码进行传入。
+这个方法还接受其他的参数，剩余的参数和 `urllib.request.urlopen`(python2 是 `urllib2.urlopen`) 接口一致。请参考相关的接口或者源代码进行传入。
+
+这个方法还提供异步的版本：
+
+```python
+import py_eureka_client.eureka_client as eureka_client
+
+def success_callabck(data):
+    # type: (Union[str, dict]) -> object
+    # 处理正常返回的参数
+    print(data)
+
+def error_callback(error):
+    # type: (urllib.request.HTTPError) -> object
+    # 处理错误
+    print(error)
+
+eureka_client.do_service_async("OTHER-SERVICE-NAME", "/service/context/path", on_success=success_callabck, on_error=error_callback)
+```
+
+如果你不希望使用内置的 HTTP 客户端，希望使用其他的客户端的话，你可以使用 `walk_nodes` 函数来实现：
+
+```python
+import py_eureka_client.eureka_client as eureka_client
+
+def walk_using_your_own_urllib(url):
+    print(url)
+    """
+    # 根据传入的 url 参数，通过你选择的其他库来调用其他组件提供的 Restful 接口。
+    # 你返回的数据会直接被 `eureka_client.walk_nodes` 函数返回
+    # 如果你发现给定的 url 的节点无法访问，请 raise 一个 `urllib.request.HTTPError`(urllib2.HTTPError in python2)，
+    # 之后 `eureka_client.walk_nodes` 会继续寻找其他状态为 UP 的节点来调用。
+    """
+
+try:
+    # `res` 是你在 walk_using_your_own_urllib 中返回的数据。
+    res = eureka_client.walk_nodes("OTHER-SERVICE-NAME", "/service/context/path", walker=walk_using_your_own_urllib)
+    print(res)
+except urllib.request.HTTPError as e:
+    # 如果所有的节点没有正确返回结果，以上错误将被抛出
+    print(e)
+```
+
+这个方法同样有一个异步的版本：
+
+```python
+import py_eureka_client.eureka_client as eureka_client
+
+def walk_using_your_own_urllib(url):
+    print(url)
+
+def success_callabck(data):
+    # type: (Union[str, dict]) -> object
+    print(data)
+
+def error_callback(error):
+    # type: (urllib.request.HTTPError) -> object
+    print(error)
+
+eureka_client.walk_nodes("OTHER-SERVICE-NAME", "/service/context/path",
+                          walker=walk_using_your_own_urllib,
+                          on_success=success_callabck,
+                          on_error=error_callback)
+```
 
 ### 高可用
 
-do_service 方法支持 HA（高可用），该方法会尝试所有从 ereka 服务器取得的节点，直至其中一个节点返回数据，或者所有的节点都尝试失败。
+`do_service` 和 `walk_nodes` 方法支持 HA（高可用），该方法会尝试所有从 ereka 服务器取得的节点，直至其中一个节点返回数据，或者所有的节点都尝试失败。
 
 该方法有几种 HA 的策略，这些策略分别是：
 
