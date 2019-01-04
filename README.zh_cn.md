@@ -216,7 +216,7 @@ eureka_client.init_discovery_client(eureka_server_list, ha_strategy=eureka_clien
 
 ### 退出
 
-大部分情况下，如果你正常退出 python 应用程序，`py_eureka_client` 会自己停止并且向 eureka 服务器要求删除当前的节点实例，但是，有时候你可能希望自己来控制退出的时机，那么你可以通过以下代码来实现：
+大部分情况下，如果你正常退出 python 应用程序，`py_eureka_client` 会自己停止并且向 eureka 服务器要求删除当前的节点实例（通过 @atexit 实现），但是，有时候你可能希望自己来控制退出的时机，那么你可以通过以下代码来实现：
 
 ```python
 import py_eureka_client.eureka_client as eureka_client
