@@ -192,3 +192,13 @@ eureka_client.init(eureka_server="http://your-eureka-server-peer1,http://your-eu
 eureka_client.init_discovery_client("http://192.168.3.116:8761/eureka/, http://192.168.3.116:8762/eureka/",
                                     ha_ha_strategy=eureka_client.HA_STRATEGY_STICK)
 ```
+
+### Stop Client
+
+This module will stop and unregister from eureka server automatically when your program exit normally. (use `@atexit`), however, if you want to stop it by yourself, please use the following code:
+
+```python
+import py_eureka_client.eureka_client as eureka_client
+
+eureka_client.stop()
+```
