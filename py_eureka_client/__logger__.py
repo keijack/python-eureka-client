@@ -14,7 +14,7 @@ def set_level(level):
         _LOG_LEVEL_ = lv
 
 
-def getLogger(tag="MetadataService", level=None):
+def getLogger(tag="py_eureka_client", level=None):
     logger = logging.getLogger(tag)
 
     _formatter_ = logging.Formatter(fmt='[%(asctime)s]-[%(name)s]-[line:%(lineno)d] -%(levelname)-4s: %(message)s',
