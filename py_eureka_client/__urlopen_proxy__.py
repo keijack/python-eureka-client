@@ -48,8 +48,14 @@ class Request(urllib2.Request, object):
         url_obj = _get_url_and_basic_auth(url)
         url_addr = url_obj[0]
         url_auth = url_obj[1]
-        super(Request, self).__init__(url_addr, data=data, headers=headers,
+        try:
+            super(Request, self).__init__(url_addr, data=data, headers=headers,
+                                      origin_req_host=origin_req_host, unverifiable=unverifiable,
+                                      method=method)
+        except TypeError:
+            super(Request, self).__init__(url_addr, data=data, headers=headers,
                                       origin_req_host=origin_req_host, unverifiable=unverifiable)
+            self.get_method = lambda: method if method is not None else "GET"
         if url_auth is not None:
             self.add_header('Authorization', 'Basic %s' % url_auth)
 
