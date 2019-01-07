@@ -13,15 +13,12 @@ from threading import Timer
 from threading import Lock
 from threading import Thread
 try:
-    import urllib.request as urllib2
-except ImportError:
-    import urllib2
-try:
     from urllib.parse import urlparse
 except ImportError:
     from urlparse import urlparse
 
 from py_eureka_client.__logger__ import getLogger
+import py_eureka_client.__urlopen_proxy__ as urllib2
 
 try:
     long(0)
