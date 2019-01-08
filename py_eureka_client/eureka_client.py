@@ -17,7 +17,7 @@ try:
 except ImportError:
     from urlparse import urlparse
 
-from py_eureka_client.__logger__ import getLogger
+from py_eureka_client.__logger__ import get_logger
 import py_eureka_client.__urlopen_proxy__ as urllib2
 
 try:
@@ -26,7 +26,7 @@ except NameError:
     # python 3 does no longer support long method, use int instead
     long = int
 
-_logger = getLogger("EurekaClient")
+_logger = get_logger("EurekaClient")
 
 """
 Status of instances
@@ -480,7 +480,7 @@ def _build_lease_info(xml_node):
         elif child_node.tag == "lastRenewalTimestamp":
             leaseInfo.lastRenewalTimestamp = long(child_node.text)
         elif child_node.tag == "renewalTimestamp":
-            leaseInfo.registrationTimestamp = long(child_node.text)
+            leaseInfo.renewalTimestamp = long(child_node.text)
         elif child_node.tag == "evictionTimestamp":
             leaseInfo.evictionTimestamp = long(child_node.text)
         elif child_node.tag == "serviceUpTimestamp":

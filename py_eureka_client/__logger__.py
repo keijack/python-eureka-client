@@ -9,12 +9,12 @@ def set_level(level):
     global _LOG_LEVEL_
     lv = level.upper()
     if lv in ("DEBUG", "INFO", "WARN", "ERROR"):
-        _logger_ = getLogger("Logger", "INFO")
+        _logger_ = get_logger("Logger", "INFO")
         _logger_.info("global logger set to %s" % lv)
         _LOG_LEVEL_ = lv
 
 
-def getLogger(tag="py_eureka_client", level=None):
+def get_logger(tag="py_eureka_client", level=None):
     logger = logging.getLogger(tag)
 
     _formatter_ = logging.Formatter(fmt='[%(asctime)s]-[%(name)s]-[line:%(lineno)d] -%(levelname)-4s: %(message)s',
