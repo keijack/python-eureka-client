@@ -62,6 +62,10 @@ HA_STRATEGY_OTHER = 3
 The timeout seconds that all http request to the eureka server
 """
 _DEFAULT_TIME_OUT = 5
+"""
+Default eureka server url.
+"""
+_DEFAULT_EUREKA_SERVER_URL = "http://127.0.0.1:8761/eureka/"
 
 
 ### =========================> Base Mehods <======================================== ###
@@ -538,7 +542,7 @@ class RegistryClient:
     """Eureka client for spring cloud"""
 
     def __init__(self,
-                 eureka_server="http://127.0.0.1:8761/eureka/",
+                 eureka_server=_DEFAULT_EUREKA_SERVER_URL,
                  app_name="",
                  instance_id="",
                  instance_host="",
@@ -754,7 +758,7 @@ __cache_registry_clients = {}
 __cache_registry_clients_lock = Lock()
 
 
-def init_registry_client(eureka_server="http://127.0.0.1:8761/eureka/",
+def init_registry_client(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
                          app_name="",
                          instance_id="",
                          instance_host="",
@@ -1097,7 +1101,7 @@ __cache_discovery_clients = {}
 __cache_discovery_clients_lock = Lock()
 
 
-def init_discovery_client(eureka_server="http://127.0.0.1:8761/eureka/", regions=[], renewal_interval_in_secs=30, ha_strategy=HA_STRATEGY_RANDOM):
+def init_discovery_client(eureka_server=_DEFAULT_EUREKA_SERVER_URL, regions=[], renewal_interval_in_secs=30, ha_strategy=HA_STRATEGY_RANDOM):
     with __cache_discovery_clients_lock:
         assert __cache_key not in __cache_discovery_clients, "Client has already been initialized."
         cli = DiscoveryClient(eureka_server, regions=regions, renewal_interval_in_secs=renewal_interval_in_secs, ha_strategy=ha_strategy)
@@ -1115,7 +1119,7 @@ def get_discovery_client():
             return None
 
 
-def init(eureka_server="http://127.0.0.1:8761/eureka/",
+def init(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
          regions=[],
          app_name="",
          instance_id="",
