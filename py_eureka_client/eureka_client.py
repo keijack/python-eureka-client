@@ -565,14 +565,15 @@ class RegistryClient:
         self.__eureka_servers = eureka_server.split(",")
 
         def try_to_get_client_ip(url):
+            url_addr = urllib2._get_url_and_basic_auth(url)[0]
             if instance_host == "" and instance_ip == "":
-                self.__instance_host = self.__instance_ip = RegistryClient.__get_instance_ip(url)
+                self.__instance_host = self.__instance_ip = RegistryClient.__get_instance_ip(url_addr)
             elif instance_host != "" and instance_ip == "":
                 self.__instance_host = instance_host
                 if RegistryClient.__is_ip(instance_host):
                     self.__instance_ip = instance_host
                 else:
-                    self.__instance_ip = RegistryClient.__get_instance_ip(url)
+                    self.__instance_ip = RegistryClient.__get_instance_ip(url_addr)
             else:
                 self.__instance_host = instance_ip
                 self.__instance_ip = instance_ip
