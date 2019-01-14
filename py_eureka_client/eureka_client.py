@@ -66,10 +66,23 @@ _DEFAULT_TIME_OUT = 5
 Default eureka server url.
 """
 _DEFAULT_EUREKA_SERVER_URL = "http://127.0.0.1:8761/eureka/"
-
+"""
+Default instance field values
+"""
+_DEFAULT_INSTNACE_PORT = 9090
+_DEFAULT_INSTNACE_SECURE_PORT = 9443
+_RENEWAL_INTERVAL_IN_SECS = 30
+_DURATION_IN_SECS = 90
+_DEFAULT_DATA_CENTER_INFO = "MyOwn"
+_DEFAULT_DATA_CENTER_INFO_CLASS = "com.netflix.appinfo.InstanceInfo$DefaultDataCenterInfo"
+"""
+Default encoding
+"""
+_DEFAULT_ENCODING = "utf-8"
 
 ### =========================> Base Mehods <======================================== ###
 ### Beans ###
+
 
 class Applications:
 
@@ -173,8 +186,8 @@ class Application:
 class LeaseInfo:
 
     def __init__(self,
-                 renewalIntervalInSecs=30,
-                 durationInSecs=90,
+                 renewalIntervalInSecs=_RENEWAL_INTERVAL_IN_SECS,
+                 durationInSecs=_DURATION_IN_SECS,
                  registrationTimestamp=0,
                  lastRenewalTimestamp=0,
                  renewalTimestamp=0,
@@ -192,8 +205,8 @@ class LeaseInfo:
 class DataCenterInfo:
 
     def __init__(self,
-                 name="MyOwn",  # Netflix, Amazon, MyOwn
-                 className="com.netflix.appinfo.InstanceInfo$DefaultDataCenterInfo"):
+                 name=_DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
+                 className=_DEFAULT_DATA_CENTER_INFO_CLASS):
         self.name = name
         self.className = className
 
@@ -212,8 +225,8 @@ class Instance:
                  app="",
                  appGroupName="",
                  ipAddr="",
-                 port=PortWrapper(port=9090, enabled=True),
-                 securePort=PortWrapper(port=9443, enabled=False),
+                 port=PortWrapper(port=_DEFAULT_INSTNACE_PORT, enabled=True),
+                 securePort=PortWrapper(port=_DEFAULT_INSTNACE_SECURE_PORT, enabled=False),
                  homePageUrl="",
                  statusPageUrl="",
                  healthCheckUrl="",
@@ -307,7 +320,7 @@ def _register(eureka_server, instance_dic):
     req = urllib2.Request(_format_url(eureka_server) + "apps/%s" % instance_dic["app"])
     req.add_header('Content-Type', 'application/json')
     req.get_method = lambda: "POST"
-    response = urllib2.urlopen(req, json.dumps({"instance": instance_dic}).encode("utf-8"), timeout=_DEFAULT_TIME_OUT)
+    response = urllib2.urlopen(req, json.dumps({"instance": instance_dic}).encode(_DEFAULT_ENCODING), timeout=_DEFAULT_TIME_OUT)
     response.close()
 
 
@@ -370,7 +383,7 @@ def _get_applications_(url, regions=[]):
         _url = _url + ("&" if "?" in _url else "?") + "regions=" + (",".join(regions))
 
     f = urllib2.urlopen(_url, timeout=_DEFAULT_TIME_OUT)
-    txt = f.read().decode("utf-8")
+    txt = f.read().decode(_DEFAULT_ENCODING)
     f.close()
     return _build_applications(ElementTree.fromstring(txt))
 
@@ -511,7 +524,7 @@ def get_secure_vip(eureka_server, svip, regions=[]):
 def get_application(eureka_server, app_name):
     url = _format_url(eureka_server) + "apps/" + app_name
     f = urllib2.urlopen(url, timeout=_DEFAULT_TIME_OUT)
-    txt = f.read().decode('utf-8')
+    txt = f.read().decode(_DEFAULT_ENCODING)
     f.close()
     return _build_application(ElementTree.fromstring(txt))
 
@@ -526,7 +539,7 @@ def get_instance(eureka_server, instance_id):
 
 def _get_instance_(url):
     f = urllib2.urlopen(url, timeout=_DEFAULT_TIME_OUT)
-    txt = f.read().decode('utf-8')
+    txt = f.read().decode(_DEFAULT_ENCODING)
     f.close()
     return _build_instance(ElementTree.fromstring(txt))
 
@@ -547,14 +560,14 @@ class RegistryClient:
                  instance_id="",
                  instance_host="",
                  instance_ip="",
-                 instance_port=9090,
+                 instance_port=_DEFAULT_INSTNACE_PORT,
                  instance_unsecure_port_enabled=True,
-                 instance_secure_port=9443,
+                 instance_secure_port=_DEFAULT_INSTNACE_SECURE_PORT,
                  instance_secure_port_enabled=False,
                  countryId=1,  # @deprecaded
-                 data_center_name="MyOwn",  # Netflix, Amazon, MyOwn
-                 renewal_interval_in_secs=30,
-                 duration_in_secs=90,
+                 data_center_name=_DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
+                 renewal_interval_in_secs=_RENEWAL_INTERVAL_IN_SECS,
+                 duration_in_secs=_DURATION_IN_SECS,
                  home_page_url="",
                  status_page_url="",
                  health_check_url="",
@@ -569,7 +582,7 @@ class RegistryClient:
         self.__eureka_servers = eureka_server.split(",")
 
         def try_to_get_client_ip(url):
-            url_addr = urllib2._get_url_and_basic_auth(url)[0]
+            url_addr = urllib2.get_url_and_basic_auth(url)[0]
             if instance_host == "" and instance_ip == "":
                 self.__instance_host = self.__instance_ip = RegistryClient.__get_instance_ip(url_addr)
             elif instance_host != "" and instance_ip == "":
@@ -599,7 +612,7 @@ class RegistryClient:
             },
             'countryId': countryId,
             'dataCenterInfo': {
-                '@class': 'com.netflix.appinfo.InstanceInfo$DefaultDataCenterInfo',
+                '@class': _DEFAULT_DATA_CENTER_INFO_CLASS,
                 'name': data_center_name
             },
             'leaseInfo': {
@@ -763,14 +776,14 @@ def init_registry_client(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
                          instance_id="",
                          instance_host="",
                          instance_ip="",
-                         instance_port=9090,
+                         instance_port=_DEFAULT_INSTNACE_PORT,
                          instance_unsecure_port_enabled=True,
-                         instance_secure_port=9443,
+                         instance_secure_port=_DEFAULT_INSTNACE_SECURE_PORT,
                          instance_secure_port_enabled=False,
                          countryId=1,  # @deprecaded
-                         data_center_name="MyOwn",  # Netflix, Amazon, MyOwn
-                         renewal_interval_in_secs=30,
-                         duration_in_secs=90,
+                         data_center_name=_DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
+                         renewal_interval_in_secs=_RENEWAL_INTERVAL_IN_SECS,
+                         duration_in_secs=_DURATION_IN_SECS,
                          home_page_url="",
                          status_page_url="",
                          health_check_url="",
@@ -817,7 +830,7 @@ def get_registry_client():
 class DiscoveryClient:
     """Discover the apps registered in spring cloud server, this class will do some cached, if you want to get the apps immediatly, use the global functions"""
 
-    def __init__(self, eureka_server, regions=None, renewal_interval_in_secs=30, ha_strategy=HA_STRATEGY_RANDOM):
+    def __init__(self, eureka_server, regions=None, renewal_interval_in_secs=_RENEWAL_INTERVAL_IN_SECS, ha_strategy=HA_STRATEGY_RANDOM):
         assert ha_strategy in [HA_STRATEGY_RANDOM, HA_STRATEGY_STICK, HA_STRATEGY_OTHER], "do not support strategy %d " % ha_strategy
         self.__eureka_servers = eureka_server.split(",")
         self.__regions = regions if regions is not None else []
@@ -1000,7 +1013,7 @@ class DiscoveryClient:
                 req.add_header(k, v)
 
             response = urllib2.urlopen(req, data=data, timeout=timeout, cafile=cafile, capath=capath, cadefault=cadefault, context=context)
-            res_txt = response.read().decode("utf-8")
+            res_txt = response.read().decode(_DEFAULT_ENCODING)
             response.close()
             if return_type.lower() in ("json", "dict", "dictionary"):
                 return json.loads(res_txt)
@@ -1101,7 +1114,7 @@ __cache_discovery_clients = {}
 __cache_discovery_clients_lock = Lock()
 
 
-def init_discovery_client(eureka_server=_DEFAULT_EUREKA_SERVER_URL, regions=[], renewal_interval_in_secs=30, ha_strategy=HA_STRATEGY_RANDOM):
+def init_discovery_client(eureka_server=_DEFAULT_EUREKA_SERVER_URL, regions=[], renewal_interval_in_secs=_RENEWAL_INTERVAL_IN_SECS, ha_strategy=HA_STRATEGY_RANDOM):
     with __cache_discovery_clients_lock:
         assert __cache_key not in __cache_discovery_clients, "Client has already been initialized."
         cli = DiscoveryClient(eureka_server, regions=regions, renewal_interval_in_secs=renewal_interval_in_secs, ha_strategy=ha_strategy)
@@ -1125,14 +1138,14 @@ def init(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
          instance_id="",
          instance_host="",
          instance_ip="",
-         instance_port=9090,
+         instance_port=_DEFAULT_INSTNACE_PORT,
          instance_unsecure_port_enabled=True,
-         instance_secure_port=9443,
+         instance_secure_port=_DEFAULT_INSTNACE_SECURE_PORT,
          instance_secure_port_enabled=False,
          countryId=1,  # @deprecaded
-         data_center_name="MyOwn",  # Netflix, Amazon, MyOwn
-         renewal_interval_in_secs=30,
-         duration_in_secs=90,
+         data_center_name=_DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
+         renewal_interval_in_secs=_RENEWAL_INTERVAL_IN_SECS,
+         duration_in_secs=_DURATION_IN_SECS,
          home_page_url="",
          status_page_url="",
          health_check_url="",
