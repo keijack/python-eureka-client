@@ -933,7 +933,7 @@ class DiscoveryClient:
                     app_status_count[instance.status.upper()] = 0
                 app_status_count[instance.status.upper()] = app_status_count[instance.status.upper()] + 1
 
-        sorted_app_status_count = sorted(app_status_count.items(), __cache_key=lambda item: item[0])
+        sorted_app_status_count = sorted(app_status_count.items(), key=lambda item: item[0])
         for item in sorted_app_status_count:
             app_hash = app_hash + "%s_%d_" % (item[0], item[1])
         return app_hash
