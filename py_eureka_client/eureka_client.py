@@ -648,6 +648,7 @@ class RegistryClient:
                 try:
                     fun(url)
                 except (urllib2.HTTPError, urllib2.URLError):
+                    _logger.error("error!")
                     _logger.warn("Eureka server [%s] is down, use next url to try." % url)
                     tried_servers.append(url)
                     untry_servers = untry_servers[1:]
@@ -730,7 +731,9 @@ class RegistryClient:
                                                                      self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"],
                                                                      status=self.__instance["status"], overriddenstatus=overridden_status))
         except:
-            _logger.exception("error!")
+            _logger.exception("Error!")
+            _logger.info("Cannot send heartbeat to server, try to register")
+            self.register()
 
     def status_update(self, new_status):
         self.__instance["status"] = new_status
