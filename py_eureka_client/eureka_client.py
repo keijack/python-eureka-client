@@ -648,7 +648,6 @@ class RegistryClient:
                 try:
                     fun(url)
                 except (urllib2.HTTPError, urllib2.URLError):
-                    _logger.error("error!")
                     _logger.warn("Eureka server [%s] is down, use next url to try." % url)
                     tried_servers.append(url)
                     untry_servers = untry_servers[1:]
