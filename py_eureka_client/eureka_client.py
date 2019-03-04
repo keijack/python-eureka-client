@@ -10,7 +10,7 @@ import random
 import inspect
 import xml.etree.ElementTree as ElementTree
 from threading import Timer
-from threading import Lock
+from threading import RLock
 from threading import Thread
 try:
     from urllib.parse import urlparse
@@ -94,7 +94,7 @@ class Applications:
         self.versions__delta = versions__delta
         self.__applications = applications if applications is not None else []
         self.__application_name_dic = {}
-        self.__app_lock = Lock()
+        self.__app_lock = RLock()
 
     @property
     def appsHashcode(self):
@@ -129,7 +129,7 @@ class Application:
         self.name = name
         self.__instances = instances if instances is not None else []
         self.__instances_dict = {}
-        self.__inst_lock = Lock()
+        self.__inst_lock = RLock()
 
     @property
     def instances(self):
@@ -578,7 +578,7 @@ class RegistryClient:
         assert app_name is not None and app_name != "", "application name must be specified."
         assert instance_port > 0, "port is unvalid"
 
-        self.__net_lock = Lock()
+        self.__net_lock = RLock()
         self.__eureka_servers = eureka_server.split(",")
 
         def try_to_get_client_ip(url):
@@ -770,7 +770,7 @@ class RegistryClient:
 
 __cache_key = "default"
 __cache_registry_clients = {}
-__cache_registry_clients_lock = Lock()
+__cache_registry_clients_lock = RLock()
 
 
 def init_registry_client(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
@@ -818,7 +818,7 @@ def init_registry_client(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
 
 
 def get_registry_client():
-    # type (str) -> RegistryClient
+    # type () -> RegistryClient
     with __cache_registry_clients_lock:
         if __cache_key in __cache_registry_clients:
             return __cache_registry_clients[__cache_key]
@@ -843,8 +843,8 @@ class DiscoveryClient:
         self.__ha_cache = {}
         self.__timer = Timer(self.__cache_time_in_secs, self.__heartbeat)
         self.__timer.daemon = True
-        self.__application_mth_lock = Lock()
-        self.__net_lock = Lock()
+        self.__application_mth_lock = RLock()
+        self.__net_lock = RLock()
 
     def __heartbeat(self):
         self.__fetch_delta()
@@ -975,7 +975,7 @@ class DiscoveryClient:
                 error_nodes.append(node.instanceId)
                 node = self.__get_availabe_service(app_name, error_nodes)
 
-        raise urllib2.HTTPError("Try all up instances in registry, but all fail")
+        raise urllib2.URLError("Try all up instances in registry, but all fail")
 
     def do_service_async(self, app_name="", service="", return_type="string",
                          prefer_ip=False, prefer_https=False,
@@ -1113,7 +1113,7 @@ class DiscoveryClient:
 
 
 __cache_discovery_clients = {}
-__cache_discovery_clients_lock = Lock()
+__cache_discovery_clients_lock = RLock()
 
 
 def init_discovery_client(eureka_server=_DEFAULT_EUREKA_SERVER_URL, regions=[], renewal_interval_in_secs=_RENEWAL_INTERVAL_IN_SECS, ha_strategy=HA_STRATEGY_RANDOM):
