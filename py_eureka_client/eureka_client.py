@@ -959,7 +959,7 @@ class DiscoveryClient:
         assert inspect.isfunction(walker) or inspect.ismethod(walker), "walker must be a method or function"
         error_nodes = []
         app_name = app_name.upper()
-        node = self.__get_availabe_service(app_name)
+        node = self.__get_available_service(app_name)
 
         while node is not None:
             try:
@@ -973,7 +973,7 @@ class DiscoveryClient:
             except (urllib2.HTTPError, urllib2.URLError):
                 _logger.warn("do service %s in node [%s] error, use next node." % (service, node.instanceId))
                 error_nodes.append(node.instanceId)
-                node = self.__get_availabe_service(app_name, error_nodes)
+                node = self.__get_available_service(app_name, error_nodes)
 
         raise urllib2.URLError("Try all up instances in registry, but all fail")
 
@@ -1023,7 +1023,7 @@ class DiscoveryClient:
                 return res_txt
         return self.walk_nodes(app_name, service, prefer_ip, prefer_https, walk_using_urllib)
 
-    def __get_availabe_service(self, application_name, ignore_instance_ids=None):
+    def __get_available_service(self, application_name, ignore_instance_ids=None):
         app = self.applications.get_application(application_name)
         if app is None:
             return None
