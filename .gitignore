@@ -102,6 +102,8 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+/my_test
 my_test_main.py
 upload.sh
 
