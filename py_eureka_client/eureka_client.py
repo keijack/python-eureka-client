@@ -761,11 +761,10 @@ class RegistryClient:
             self.cancel()
 
     def __heart_beat(self):
-        _logger.debug("sending heart beat to spring cloud server ")
-        self.send_heart_beat()
-        self.__heart_beat_timer = Timer(self.__instance["leaseInfo"]["renewalIntervalInSecs"], self.__heart_beat)
-        self.__heart_beat_timer.daemon = True
-        self.__heart_beat_timer.start()
+        while True:
+            _logger.debug("sending heart beat to spring cloud server ")
+            self.send_heart_beat()
+            time.sleep(self.__instance["leaseInfo"]["renewalIntervalInSecs"])
 
 
 __cache_key = "default"
@@ -847,10 +846,9 @@ class DiscoveryClient:
         self.__net_lock = RLock()
 
     def __heartbeat(self):
-        self.__fetch_delta()
-        self.__timer = Timer(self.__cache_time_in_secs, self.__heartbeat)
-        self.__timer.daemon = True
-        self.__timer.start()
+        while True:
+            self.__fetch_delta()
+            time.sleep(self.__cache_time_in_secs)
 
     @property
     def applications(self):
