@@ -573,10 +573,12 @@ class RegistryClient:
                  health_check_url="",
                  vip_adr="",
                  secure_vip_addr="",
-                 is_coordinating_discovery_server=False):
+                 is_coordinating_discovery_server=False,
+                 metadata={}):
         assert eureka_server is not None and eureka_server != "", "eureka server must be specified."
         assert app_name is not None and app_name != "", "application name must be specified."
         assert instance_port > 0, "port is unvalid"
+        assert isinstance(metadata, dict), "metadata must be dict"
 
         self.__net_lock = RLock()
         self.__eureka_servers = eureka_server.split(",")
@@ -597,6 +599,10 @@ class RegistryClient:
 
         self.__try_all_eureka_server(try_to_get_client_ip)
 
+        mdata = {
+            'management.port': str(instance_port)
+        }
+        mdata.update(metadata)
         self.__instance = {
             'instanceId': instance_id if instance_id != "" else "%s:%s:%d" % (self.__instance_host, app_name.lower(), instance_port),
             'hostName': self.__instance_host,
@@ -623,9 +629,7 @@ class RegistryClient:
                 'evictionTimestamp': 0,
                 'serviceUpTimestamp': 0
             },
-            'metadata': {
-                'management.port': str(instance_port)
-            },
+            'metadata': mdata,
             'homePageUrl': RegistryClient.__format_url(home_page_url, self.__instance_host, instance_port),
             'statusPageUrl': RegistryClient.__format_url(status_page_url, self.__instance_host, instance_port, "info"),
             'healthCheckUrl': RegistryClient.__format_url(health_check_url, self.__instance_host, instance_port, "health"),
@@ -790,7 +794,8 @@ def init_registry_client(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
                          health_check_url="",
                          vip_adr="",
                          secure_vip_addr="",
-                         is_coordinating_discovery_server=False):
+                         is_coordinating_discovery_server=False,
+                         metadata={}):
     with __cache_registry_clients_lock:
         client = RegistryClient(eureka_server=eureka_server,
                                 app_name=app_name,
@@ -810,7 +815,8 @@ def init_registry_client(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
                                 health_check_url=health_check_url,
                                 vip_adr=vip_adr,
                                 secure_vip_addr=secure_vip_addr,
-                                is_coordinating_discovery_server=is_coordinating_discovery_server)
+                                is_coordinating_discovery_server=is_coordinating_discovery_server,
+                                metadata=metadata)
         __cache_registry_clients[__cache_key] = client
         client.start()
         return client
@@ -1152,6 +1158,7 @@ def init(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
          vip_adr="",
          secure_vip_addr="",
          is_coordinating_discovery_server=False,
+         metadata={},
          ha_strategy=HA_STRATEGY_RANDOM):
     registry_client = init_registry_client(eureka_server=eureka_server,
                                            app_name=app_name,
@@ -1171,7 +1178,8 @@ def init(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
                                            health_check_url=health_check_url,
                                            vip_adr=vip_adr,
                                            secure_vip_addr=secure_vip_addr,
-                                           is_coordinating_discovery_server=is_coordinating_discovery_server)
+                                           is_coordinating_discovery_server=is_coordinating_discovery_server,
+                                           metadata=metadata)
     discovery_client = init_discovery_client(eureka_server,
                                              regions=regions,
                                              renewal_interval_in_secs=renewal_interval_in_secs,
