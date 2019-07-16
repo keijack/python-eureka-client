@@ -214,6 +214,46 @@ eureka_client.init(eureka_server=eureka_server_list,
 eureka_client.init_discovery_client(eureka_server_list, ha_strategy=eureka_client.HA_STRATEGY_STICK)
 ```
 
+### 使用三方 HTTP 客户端
+
+默认情况下，组件使用了内置的 urllib.request (python 2 中时 urllib2 ) 来进行 HTTP 请求。你可以使用别的 HTTP 库来进行访问。这在自签名的 HTTPS 证书的场景下尤为有效。
+
+你需要以下步骤来使用自己的 HTTP 客户端：
+
+1. 继承 `py_eureka_client.http_client` 中的 `HttpClient` 类。
+2. 重写该类的 `urlopen` 方法，注意：该方法返回的是响应体的文本。
+3. 将你定义的类设置到`py_eureka_client.http_client` 中。
+
+```python
+import py_eureka_client.http_client as http_client
+
+# 1. 继承 `py_eureka_client.http_client` 中的 `HttpClient` 类。
+class MyHttpClient(http_client.HttpClient):
+
+    # 2. 重写该类的 `urlopen` 方法，注意：该方法返回的是响应体的文本。
+    def urlopen(self):
+        # 以下是默认实现，你可以查看该类有哪一些参数。
+        res = urllib2.urlopen(self.request, data=self.data, timeout=self.timeout,
+                              cafile=self.cafile, capath=self.capath,
+                              cadefault=self.cadefault, context=self.context)
+
+        if res.info().get("Content-Encoding") == "gzip":
+            try:
+                # python2
+                f = gzip.GzipFile(fileobj=StringIO(res.read()))
+            except NameError:
+                f = gzip.GzipFile(fileobj=res)
+        else:
+            f = res
+
+        txt = f.read().decode(_DEFAULT_ENCODING)
+        f.close()
+        return txt
+
+# 3. 将你定义的类设置到`py_eureka_client.http_client` 中。
+http_client.set_http_client_class(MyHttpClient)
+```
+
 ### 退出
 
 大部分情况下，如果你正常退出 python 应用程序，`py_eureka_client` 会自己停止并且向 eureka 服务器要求删除当前的节点实例（通过 @atexit 实现），但是，有时候你可能希望自己来控制退出的时机，那么你可以通过以下代码来实现：

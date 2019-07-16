@@ -14,6 +14,11 @@ except ImportError:
     from urllib2 import URLError
     from StringIO import StringIO
 
+"""
+Default encoding
+"""
+_DEFAULT_ENCODING = "utf-8"
+
 _URL_REGEX = re.compile(
     r'^(?:http)s?://'  # http:// or https://
     r'(([A-Z0-9_~!.%]+):([A-Z0-9_~!.%]+)@)?'  # basic authentication -> username:password@
@@ -64,8 +69,48 @@ class Request(urllib2.Request, object):
             self.add_header('Authorization', 'Basic %s' % url_auth)
 
 
-def urlopen(url, data=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
-            cafile=None, capath=None, cadefault=False, context=None):
+class HttpClient(object):
+
+    def __init__(self, request=None, data=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
+                 cafile=None, capath=None, cadefault=False, context=None):
+        self.request = request
+        self.data = data
+        self.timeout = timeout
+        self.cafile = cafile
+        self.capath = capath
+        self.cadefault = cadefault
+        self.context = context
+
+    def urlopen(self):
+        res = urllib2.urlopen(self.request, data=self.data, timeout=self.timeout,
+                              cafile=self.cafile, capath=self.capath,
+                              cadefault=self.cadefault, context=self.context)
+
+        if res.info().get("Content-Encoding") == "gzip":
+            try:
+                # python2
+                f = gzip.GzipFile(fileobj=StringIO(res.read()))
+            except NameError:
+                f = gzip.GzipFile(fileobj=res)
+        else:
+            f = res
+
+        txt = f.read().decode(_DEFAULT_ENCODING)
+        f.close()
+        return txt
+
+
+__HTTP_CLIENT_CLASS__ = HttpClient
+
+
+def set_http_client_class(clz):
+    assert issubclass(clz, HttpClient)
+    global __HTTP_CLIENT_CLASS__
+    __HTTP_CLIENT_CLASS__ = clz
+
+
+def load(url, data=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
+         cafile=None, capath=None, cadefault=False, context=None):
     if isinstance(url, urllib2.Request):
         request = url
     elif isinstance(url, str):
@@ -73,16 +118,5 @@ def urlopen(url, data=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
     else:
         raise URLError("Unvalid URL")
     request.add_header("Accept-encoding", "gzip")
-    res = urllib2.urlopen(request, data=data, timeout=timeout,
-                          cafile=cafile, capath=capath, cadefault=cadefault, context=context)
-
-    if res.info().get("Content-Encoding") == "gzip":
-        try:
-            # python2
-            f = gzip.GzipFile(fileobj=StringIO(res.read()))
-        except NameError:
-            f = gzip.GzipFile(fileobj=res)
-    else:
-        f = res
-
-    return f
+    return __HTTP_CLIENT_CLASS__(request=request, data=data, timeout=timeout,
+                             cafile=cafile, capath=capath, cadefault=cadefault, context=context).urlopen()

@@ -18,7 +18,7 @@ except ImportError:
     from urlparse import urlparse
 
 from py_eureka_client.__logger__ import get_logger
-import py_eureka_client.__urlopen_proxy__ as urllib2
+import py_eureka_client.http_client as http_client
 
 try:
     long(0)
@@ -317,18 +317,16 @@ def register(eureka_server, instance):
 
 
 def _register(eureka_server, instance_dic):
-    req = urllib2.Request(_format_url(eureka_server) + "apps/%s" % instance_dic["app"])
+    req = http_client.Request(_format_url(eureka_server) + "apps/%s" % instance_dic["app"])
     req.add_header('Content-Type', 'application/json')
     req.get_method = lambda: "POST"
-    response = urllib2.urlopen(req, json.dumps({"instance": instance_dic}).encode(_DEFAULT_ENCODING), timeout=_DEFAULT_TIME_OUT)
-    response.close()
+    http_client.load(req, json.dumps({"instance": instance_dic}).encode(_DEFAULT_ENCODING), timeout=_DEFAULT_TIME_OUT)
 
 
 def cancel(eureka_server, app_name, instance_id):
-    req = urllib2.Request(_format_url(eureka_server) + "apps/%s/%s" % (app_name, instance_id))
+    req = http_client.Request(_format_url(eureka_server) + "apps/%s/%s" % (app_name, instance_id))
     req.get_method = lambda: "DELETE"
-    response = urllib2.urlopen(req, timeout=_DEFAULT_TIME_OUT)
-    response.close()
+    http_client.load(req, timeout=_DEFAULT_TIME_OUT)
 
 
 def send_heart_beat(eureka_server, app_name, instance_id, last_dirty_timestamp, status=INSTANCE_STATUS_UP, overriddenstatus=""):
@@ -338,30 +336,28 @@ def send_heart_beat(eureka_server, app_name, instance_id, last_dirty_timestamp, 
     if overriddenstatus != "":
         url += "&overriddenstatus=" + overriddenstatus
 
-    req = urllib2.Request(url)
+    req = http_client.Request(url)
     req.get_method = lambda: "PUT"
-    response = urllib2.urlopen(req, timeout=_DEFAULT_TIME_OUT)
-    response.close()
+    http_client.load(req, timeout=_DEFAULT_TIME_OUT)
 
 
 def status_update(eureka_server, app_name, instance_id, last_dirty_timestamp, status):
     url = _format_url(eureka_server) + "apps/%s/%s?status=%s&lastDirtyTimestamp=%s" % \
         (app_name, instance_id, status, str(last_dirty_timestamp))
 
-    req = urllib2.Request(url)
+    req = http_client.Request(url)
     req.get_method = lambda: "PUT"
-    response = urllib2.urlopen(req, timeout=_DEFAULT_TIME_OUT)
-    response.close()
+    http_client.load(req, timeout=_DEFAULT_TIME_OUT)
 
 
 def delete_status_override(eureka_server, app_name, instance_id, last_dirty_timestamp):
     url = _format_url(eureka_server) + "apps/%s/%s/status?lastDirtyTimestamp=%s" % \
         (app_name, instance_id, str(last_dirty_timestamp))
 
-    req = urllib2.Request(url)
+    req = http_client.Request(url)
     req.get_method = lambda: "DELETE"
-    response = urllib2.urlopen(req, timeout=_DEFAULT_TIME_OUT)
-    response.close()
+    http_client.load(req, timeout=_DEFAULT_TIME_OUT)
+
 
 ####### Discovory functions ########
 
@@ -382,9 +378,7 @@ def _get_applications_(url, regions=[]):
     if len(regions) > 0:
         _url = _url + ("&" if "?" in _url else "?") + "regions=" + (",".join(regions))
 
-    f = urllib2.urlopen(_url, timeout=_DEFAULT_TIME_OUT)
-    txt = f.read().decode(_DEFAULT_ENCODING)
-    f.close()
+    txt = http_client.load(_url, timeout=_DEFAULT_TIME_OUT)
     return _build_applications(ElementTree.fromstring(txt))
 
 
@@ -523,9 +517,7 @@ def get_secure_vip(eureka_server, svip, regions=[]):
 
 def get_application(eureka_server, app_name):
     url = _format_url(eureka_server) + "apps/" + app_name
-    f = urllib2.urlopen(url, timeout=_DEFAULT_TIME_OUT)
-    txt = f.read().decode(_DEFAULT_ENCODING)
-    f.close()
+    txt = http_client.load(url, timeout=_DEFAULT_TIME_OUT)
     return _build_application(ElementTree.fromstring(txt))
 
 
@@ -538,9 +530,7 @@ def get_instance(eureka_server, instance_id):
 
 
 def _get_instance_(url):
-    f = urllib2.urlopen(url, timeout=_DEFAULT_TIME_OUT)
-    txt = f.read().decode(_DEFAULT_ENCODING)
-    f.close()
+    txt = http_client.load(url, timeout=_DEFAULT_TIME_OUT)
     return _build_instance(ElementTree.fromstring(txt))
 
 
@@ -584,7 +574,7 @@ class RegistryClient:
         self.__eureka_servers = eureka_server.split(",")
 
         def try_to_get_client_ip(url):
-            url_addr = urllib2.get_url_and_basic_auth(url)[0]
+            url_addr = http_client.get_url_and_basic_auth(url)[0]
             if instance_host == "" and instance_ip == "":
                 self.__instance_host = self.__instance_ip = RegistryClient.__get_instance_ip(url_addr)
             elif instance_host != "" and instance_ip == "":
@@ -651,7 +641,7 @@ class RegistryClient:
                 url = untry_servers[0].strip()
                 try:
                     fun(url)
-                except (urllib2.HTTPError, urllib2.URLError):
+                except (http_client.HTTPError, http_client.URLError):
                     _logger.warn("Eureka server [%s] is down, use next url to try." % url)
                     tried_servers.append(url)
                     untry_servers = untry_servers[1:]
@@ -662,7 +652,7 @@ class RegistryClient:
                 untry_servers.extend(tried_servers)
                 self.__eureka_servers = untry_servers
             if not ok:
-                raise urllib2.URLError("All eureka servers are down!")
+                raise http_client.URLError("All eureka servers are down!")
 
     @staticmethod
     def __format_url(url, host, port, defalut_ctx=""):
@@ -753,7 +743,6 @@ class RegistryClient:
     def start(self):
         _logger.debug("start to registry client...")
         self.register()
-        self.__heart_beat_timer.daemon = True
         self.__heart_beat_timer.start()
 
     def stop(self):
@@ -872,7 +861,7 @@ class DiscoveryClient:
                 url = untry_servers[0].strip()
                 try:
                     fun(url)
-                except (urllib2.HTTPError, urllib2.URLError):
+                except (http_client.HTTPError, http_client.URLError):
                     _logger.warn("Eureka server [%s] is down, use next url to try." % url)
                     tried_servers.append(url)
                     untry_servers = untry_servers[1:]
@@ -883,7 +872,7 @@ class DiscoveryClient:
                 untry_servers.extend(tried_servers)
                 self.__eureka_servers = untry_servers
             if not ok:
-                raise urllib2.URLError("All eureka servers are down!")
+                raise http_client.URLError("All eureka servers are down!")
 
     def __pull_full_registry(self):
         def do_pull(url):  # the actual function body
@@ -950,7 +939,7 @@ class DiscoveryClient:
                 res = self.walk_nodes(app_name=app_name, service=service, prefer_ip=prefer_ip, prefer_https=prefer_https, walker=walker)
                 if on_success is not None and (inspect.isfunction(on_success) or inspect.ismethod(on_success)):
                     on_success(res)
-            except urllib2.HTTPError as e:
+            except http_client.HTTPError as e:
                 if on_error is not None and (inspect.isfunction(on_error) or inspect.ismethod(on_error)):
                     on_error(e)
 
@@ -974,12 +963,12 @@ class DiscoveryClient:
                     url = url + service
                 _logger.debug("service url::" + url)
                 return walker(url)
-            except (urllib2.HTTPError, urllib2.URLError):
+            except (http_client.HTTPError, http_client.URLError):
                 _logger.warn("do service %s in node [%s] error, use next node." % (service, node.instanceId))
                 error_nodes.append(node.instanceId)
                 node = self.__get_available_service(app_name, error_nodes)
 
-        raise urllib2.URLError("Try all up instances in registry, but all fail")
+        raise http_client.URLError("Try all up instances in registry, but all fail")
 
     def do_service_async(self, app_name="", service="", return_type="string",
                          prefer_ip=False, prefer_https=False,
@@ -998,7 +987,7 @@ class DiscoveryClient:
                                       cadefault=cadefault, context=context)
                 if on_success is not None and (inspect.isfunction(on_success) or inspect.ismethod(on_success)):
                     on_success(res)
-            except urllib2.HTTPError as e:
+            except http_client.HTTPError as e:
                 if on_error is not None and (inspect.isfunction(on_error) or inspect.ismethod(on_error)):
                     on_error(e)
 
@@ -1012,15 +1001,13 @@ class DiscoveryClient:
                    data=None, timeout=_DEFAULT_TIME_OUT,
                    cafile=None, capath=None, cadefault=False, context=None):
         def walk_using_urllib(url):
-            req = urllib2.Request(url)
+            req = http_client.Request(url)
             req.get_method = lambda: method
             heads = headers if headers is not None else {}
             for k, v in heads.items():
                 req.add_header(k, v)
 
-            response = urllib2.urlopen(req, data=data, timeout=timeout, cafile=cafile, capath=capath, cadefault=cadefault, context=context)
-            res_txt = response.read().decode(_DEFAULT_ENCODING)
-            response.close()
+            res_txt = http_client.load(req, data=data, timeout=timeout, cafile=cafile, capath=capath, cadefault=cadefault, context=context)
             if return_type.lower() in ("json", "dict", "dictionary"):
                 return json.loads(res_txt)
             else:

@@ -193,6 +193,46 @@ eureka_client.init_discovery_client("http://192.168.3.116:8761/eureka/, http://1
                                     ha_ha_strategy=eureka_client.HA_STRATEGY_STICK)
 ```
 
+### Use Other Http Client
+
+You can use other http client to connect to eureka server and other service rather than the build-in urlopen method. It should be useful if you use https connections via self-signed cetificates. 
+
+To do this, you should:
+
+1. Inherit the `HttpClient` class in `py_eureka_client.http_client`.
+2. Rewrite the `urlopen` method in your class.
+3. Set your class to `py_eureka_client.http_client`. 
+
+```python
+import py_eureka_client.http_client as http_client
+
+# 1. Inherit the `HttpClient` class in `py_eureka_client.http_client`.
+class MyHttpClient(http_client.HttpClient):
+
+    # 2. Rewrite the `urlopen` method in your class.
+    def urlopen(self):
+        # The flowing code is the default implementation, you can see what fields you can use. you can change your implementation here
+        res = urllib2.urlopen(self.request, data=self.data, timeout=self.timeout,
+                              cafile=self.cafile, capath=self.capath,
+                              cadefault=self.cadefault, context=self.context)
+
+        if res.info().get("Content-Encoding") == "gzip":
+            try:
+                # python2
+                f = gzip.GzipFile(fileobj=StringIO(res.read()))
+            except NameError:
+                f = gzip.GzipFile(fileobj=res)
+        else:
+            f = res
+
+        txt = f.read().decode(_DEFAULT_ENCODING)
+        f.close()
+        return txt
+
+# 3. Set your class to `py_eureka_client.http_client`. 
+http_client.set_http_client_class(MyHttpClient)
+```
+
 ### Stop Client
 
 This module will stop and unregister from eureka server automatically when your program exit normally. (use `@atexit`), however, if you want to stop it by yourself, please use the following code:
