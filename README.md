@@ -80,7 +80,7 @@ import py_eureka_client.eureka_client as eureka_client
 eureka_client.init_discovery_client("http://192.168.3.116:8761/eureka/, http://192.168.3.116:8762/eureka/")
 ```
 
-No mather you ust `init` or `init_discovery_client`, then you can now use the following methods to use other components' service:
+No mather you use `init` or `init_discovery_client`, then you can now use the following methods to use other components' service:
 
 This is the most simplist way to do service:
 
@@ -175,7 +175,7 @@ eureka_client.walk_nodes("OTHER-SERVICE-NAME", "/service/context/path",
 There are several HA strategies when using discovery client. They are:
 
 * HA_STRATEGY_RANDOM, default strategy, find an node randamly.
-* HA_STRATEGY_STICK, use one node until it going down.
+* HA_STRATEGY_STICK, use one node until it goes down.
 * HA_STRATEGY_OTHER, always use a different node from the last time.
 
 In your `init` function or `init_discovery_client`, you can specify one of the above strategies:
@@ -186,11 +186,11 @@ import py_eureka_client.eureka_client as eureka_client
 eureka_client.init(eureka_server="http://your-eureka-server-peer1,http://your-eureka-server-peer2",
                    app_name="your_app_name",
                    instance_port=your_rest_server_port,
-                   ha_ha_strategy=eureka_client.HA_STRATEGY_STICK)
+                   ha_strategy=eureka_client.HA_STRATEGY_STICK)
 
 # If you only use the discovery client
 eureka_client.init_discovery_client("http://192.168.3.116:8761/eureka/, http://192.168.3.116:8762/eureka/",
-                                    ha_ha_strategy=eureka_client.HA_STRATEGY_STICK)
+                                    ha_strategy=eureka_client.HA_STRATEGY_STICK)
 ```
 
 ### Use Other Http Client
