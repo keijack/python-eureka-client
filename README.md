@@ -210,6 +210,8 @@ import py_eureka_client.http_client as http_client
 class MyHttpClient(http_client.HttpClient):
 
     # 2. Rewrite the `urlopen` method in your class.
+    # If you want to raise an exception, please make sure that the exception is an `urllib.error.HTTPError` or `urllib.error.URLError`
+    # (urllib2.HTTPError or urllib2.URLError in python 2), or it may cause some un-handled errors.
     def urlopen(self):
         # The flowing code is the default implementation, you can see what fields you can use. you can change your implementation here
         res = urllib2.urlopen(self.request, data=self.data, timeout=self.timeout,

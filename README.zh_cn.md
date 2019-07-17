@@ -231,6 +231,8 @@ import py_eureka_client.http_client as http_client
 class MyHttpClient(http_client.HttpClient):
 
     # 2. 重写该类的 `urlopen` 方法，注意：该方法返回的是响应体的文本。
+    # 请注意，如果你要抛出异常，请确保抛出的是 urllib.error.HTTPError 或者 urllib.error.URLError
+    # (Python 2 则分别是 urllib2.HTTPError 或者 urllib2.URLError) 否则可能会发生未可知之错误。
     def urlopen(self):
         # 以下是默认实现，你可以查看该类有哪一些参数。
         res = urllib2.urlopen(self.request, data=self.data, timeout=self.timeout,
