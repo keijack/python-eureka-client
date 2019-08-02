@@ -24,7 +24,7 @@ _URL_REGEX = re.compile(
     r'(([A-Z0-9_~!.%]+):([A-Z0-9_~!.%]+)@)?'  # basic authentication -> username:password@
     r'((?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|'  # domain...
     r'(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)|'  # domain name without `.`
-    r"(?:\[((?:[A-F0-9]{1,4}:){7}[A-F0-9]{1,4})\])|" # ipv6
+    r"(?:\[((?:[A-F0-9]{1,4}:){7}[A-F0-9]{1,4})\])|"  # ipv6
     r'localhost|'  # localhost...
     r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # ...or ip
     r'(?::(\d+))?'  # optional port
@@ -47,7 +47,7 @@ def parse_url(url):
             "schema": m.group(1),
             "host": m.group(5),
             "ipv6": m.group(6),
-            "port": int(m.group(7))
+            "port": int(m.group(7)) if m.group(7) is not None else None
         }
     else:
         raise URLError("url[%s] is not a valid url." % url)
