@@ -574,15 +574,14 @@ class RegistryClient:
         self.__eureka_servers = eureka_server.split(",")
 
         def try_to_get_client_ip(url):
-            url_addr = http_client.get_url_and_basic_auth(url)[0]
             if instance_host == "" and instance_ip == "":
-                self.__instance_host = self.__instance_ip = RegistryClient.__get_instance_ip(url_addr)
+                self.__instance_host = self.__instance_ip = RegistryClient.__get_instance_ip(url)
             elif instance_host != "" and instance_ip == "":
                 self.__instance_host = instance_host
                 if RegistryClient.__is_ip(instance_host):
                     self.__instance_ip = instance_host
                 else:
-                    self.__instance_ip = RegistryClient.__get_instance_ip(url_addr)
+                    self.__instance_ip = RegistryClient.__get_instance_ip(url)
             else:
                 self.__instance_host = instance_ip
                 self.__instance_ip = instance_ip
@@ -673,26 +672,22 @@ class RegistryClient:
 
     @staticmethod
     def __get_instance_ip(eureka_server):
-        _target_ = eureka_server
-        if not _target_.endswith('/'):
-            _target_ += '/'
-        url_obj = urlparse(_target_)
-        _target_ = url_obj.netloc
-        _logger.debug("target eureka host::: %s" % _target_)
-        if _target_.find(':') > 0:
-            arr = _target_.split(':')
-            target_ip = arr[0]
-            target_port = int(arr[1])
-        else:
-            target_ip = _target_
-            if url_obj.scheme == "http":
+        url_obj = http_client.parse_url(eureka_server)
+        target_ip = url_obj["host"]
+        target_port = url_obj["port"]
+        if target_port is None:
+            if url_obj["scheme"] == "http":
                 target_port = 80
-            elif url_obj.scheme == "https":
-                target_port = 443
             else:
-                raise Exception("Cannot parse your eureka url! ")
+                target_port = 443
 
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        if url_obj["ipv6"] is not None:
+            target_ip = url_obj["ipv6"]
+            socket_family = socket.AF_INET6
+        else:
+            socket_family = socket.AF_INET
+
+        s = socket.socket(socket_family, socket.SOCK_DGRAM)
         s.connect((target_ip, target_port))
         ip = s.getsockname()[0]
         s.close()

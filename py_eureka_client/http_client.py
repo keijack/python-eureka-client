@@ -20,30 +20,37 @@ Default encoding
 _DEFAULT_ENCODING = "utf-8"
 
 _URL_REGEX = re.compile(
-    r'^(?:http)s?://'  # http:// or https://
+    r'^((?:http)s?)://'  # http:// or https://
     r'(([A-Z0-9_~!.%]+):([A-Z0-9_~!.%]+)@)?'  # basic authentication -> username:password@
-    r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|'  # domain...
+    r'((?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|'  # domain...
     r'(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)|'  # domain name without `.`
+    r"(?:\[((?:[A-F0-9]{1,4}:){7}[A-F0-9]{1,4})\])|" # ipv6
     r'localhost|'  # localhost...
     r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # ...or ip
-    r'(?::\d+)?'  # optional port
+    r'(?::(\d+))?'  # optional port
     r'(?:/?|[/?]\S+)$', re.IGNORECASE)
 
 
-def get_url_and_basic_auth(addr_url):
-    addr = addr_url
-
-    match_obj = _URL_REGEX.match(addr)
-    groups = match_obj.groups()
-    if(groups[0] is not None):
-        addr = addr.replace(groups[0], "")
-        user_name = groups[1]
-        user_psw = groups[2]
-        ori_auth = ("%s:%s" % (user_name, user_psw)).encode()
-        auth_str = base64.standard_b64encode(ori_auth).decode()
-        return (addr, auth_str)
+def parse_url(url):
+    m = _URL_REGEX.match(url)
+    if m:
+        addr = url
+        if m.group(2) is not None:
+            addr = addr.replace(m.group(2), "")
+            ori_auth = ("%s:%s" % (m.group(3), m.group(4))).encode()
+            auth_str = base64.standard_b64encode(ori_auth).decode()
+        else:
+            auth_str = None
+        return {
+            "url": addr,
+            "auth": auth_str,
+            "schema": m.group(1),
+            "host": m.group(5),
+            "ipv6": m.group(6),
+            "port": int(m.group(7))
+        }
     else:
-        return (addr, None)
+        raise URLError("url[%s] is not a valid url." % url)
 
 
 class Request(urllib2.Request, object):
@@ -54,9 +61,9 @@ class Request(urllib2.Request, object):
         url_match = _URL_REGEX.match(url)
         if url_match is None:
             raise URLError("Unvalid URL")
-        url_obj = get_url_and_basic_auth(url)
-        url_addr = url_obj[0]
-        url_auth = url_obj[1]
+        url_obj = parse_url(url)
+        url_addr = url_obj["url"]
+        url_auth = url_obj["auth"]
         try:
             super(Request, self).__init__(url_addr, data=data, headers=headers,
                                           origin_req_host=origin_req_host, unverifiable=unverifiable,
@@ -119,4 +126,4 @@ def load(url, data=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
         raise URLError("Unvalid URL")
     request.add_header("Accept-encoding", "gzip")
     return __HTTP_CLIENT_CLASS__(request=request, data=data, timeout=timeout,
-                             cafile=cafile, capath=capath, cadefault=cadefault, context=context).urlopen()
+                                 cafile=cafile, capath=capath, cadefault=cadefault, context=context).urlopen()
