@@ -676,7 +676,7 @@ class RegistryClient:
         target_ip = url_obj["host"]
         target_port = url_obj["port"]
         if target_port is None:
-            if url_obj["scheme"] == "http":
+            if url_obj["schema"] == "http":
                 target_port = 80
             else:
                 target_port = 443
