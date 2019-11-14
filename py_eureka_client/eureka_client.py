@@ -387,7 +387,7 @@ def _build_applications(xml_node):
     if xml_node.tag != "applications":
         return None
     applications = Applications()
-    for child_node in xml_node.getchildren():
+    for child_node in list(xml_node):
         if child_node.tag == "versions__delta" and child_node.text is not None:
             applications.versions__delta = child_node.text
         elif child_node.tag == "apps__hashcode" and child_node.text is not None:
@@ -471,14 +471,14 @@ def _build_instance(xml_node):
 
 def _build_metadata(xml_node):
     metadata = {}
-    for child_node in xml_node.getchildren():
+    for child_node in list(xml_node):
         metadata[child_node.tag] = child_node.text
     return metadata
 
 
 def _build_lease_info(xml_node):
     leaseInfo = LeaseInfo()
-    for child_node in xml_node.getchildren():
+    for child_node in list(xml_node):
         if child_node.tag == "renewalIntervalInSecs":
             leaseInfo.renewalIntervalInSecs = int(child_node.text)
         elif child_node.tag == "durationInSecs":
