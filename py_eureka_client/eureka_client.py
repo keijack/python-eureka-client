@@ -331,7 +331,9 @@ def cancel(eureka_server, app_name, instance_id):
 
 
 def send_heart_beat(eureka_server, app_name, instance_id, last_dirty_timestamp, status=INSTANCE_STATUS_UP, overriddenstatus=""):
-    url = _format_url(eureka_server) + "apps/%s/%s?status=%s&lastDirtyTimestamp=%s" % \
+    #url = _format_url(eureka_server) + "apps/%s/%s?status=%s&lastDirtyTimestamp=%s" % \
+    #    (app_name, instance_id, status, str(last_dirty_timestamp))
+    url = _format_url(eureka_server) + "apps/%s/%s/status?value=%s&lastDirtyTimestamp=%s" % \
         (app_name, instance_id, status, str(last_dirty_timestamp))
     _logger.debug("heartbeat url::" + url)
     if overriddenstatus != "":
