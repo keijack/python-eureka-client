@@ -235,6 +235,22 @@ class MyHttpClient(http_client.HttpClient):
 http_client.set_http_client_class(MyHttpClient)
 ```
 
+### Logger
+
+The default logger is try to write logs to the screen, you can specify the logger handler to write it to a file.
+
+```python
+import simple_http_server.logger as logger
+import logging
+
+_formatter = logging.Formatter(fmt='[%(asctime)s]-[%(name)s]-%(levelname)-4s: %(message)s')
+_handler = logging.TimedRotatingFileHandler("/var/log/py-eureka-client.log", when="midnight", backupCount=7)
+_handler.setFormatter(_formatter)
+_handler.setLevel("INFO")
+
+logger.set_handler(_handler)
+```
+
 ### Stop Client
 
 This module will stop and unregister from eureka server automatically when your program exit normally. (use `@atexit`), however, if you want to stop it by yourself, please use the following code:

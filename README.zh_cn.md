@@ -256,6 +256,22 @@ class MyHttpClient(http_client.HttpClient):
 http_client.set_http_client_class(MyHttpClient)
 ```
 
+### 日志
+
+默认情况下，日志会输出到控制台，你创建自己的 Logging Handler 来将日志输出到别处，例如一个滚动文件中：
+
+```python
+import simple_http_server.logger as logger
+import logging
+
+_formatter = logging.Formatter(fmt='[%(asctime)s]-[%(name)s]-%(levelname)-4s: %(message)s')
+_handler = logging.TimedRotatingFileHandler("/var/log/py-eureka-client.log", when="midnight", backupCount=7)
+_handler.setFormatter(_formatter)
+_handler.setLevel("INFO")
+
+logger.set_handler(_handler)
+```
+
 ### 退出
 
 大部分情况下，如果你正常退出 python 应用程序，`py_eureka_client` 会自己停止并且向 eureka 服务器要求删除当前的节点实例（通过 @atexit 实现），但是，有时候你可能希望自己来控制退出的时机，那么你可以通过以下代码来实现：

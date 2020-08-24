@@ -17,7 +17,7 @@ try:
 except ImportError:
     from urlparse import urlparse
 
-from py_eureka_client.__logger__ import get_logger
+from py_eureka_client.logger import get_logger
 import py_eureka_client.http_client as http_client
 
 try:
@@ -331,8 +331,6 @@ def cancel(eureka_server, app_name, instance_id):
 
 
 def send_heart_beat(eureka_server, app_name, instance_id, last_dirty_timestamp, status=INSTANCE_STATUS_UP, overriddenstatus=""):
-    #url = _format_url(eureka_server) + "apps/%s/%s?status=%s&lastDirtyTimestamp=%s" % \
-    #    (app_name, instance_id, status, str(last_dirty_timestamp))
     url = _format_url(eureka_server) + "apps/%s/%s/status?value=%s&lastDirtyTimestamp=%s" % \
         (app_name, instance_id, status, str(last_dirty_timestamp))
     _logger.debug("heartbeat url::" + url)
