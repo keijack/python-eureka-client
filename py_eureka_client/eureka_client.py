@@ -380,7 +380,7 @@ def _get_applications_(url, regions=[]):
         _url = _url + ("&" if "?" in _url else "?") + "regions=" + (",".join(regions))
 
     txt = http_client.load(_url, timeout=_DEFAULT_TIME_OUT)
-    return _build_applications(ElementTree.fromstring(txt))
+    return _build_applications(ElementTree.fromstring(txt.encode(_DEFAULT_ENCODING)))
 
 
 def _build_applications(xml_node):
