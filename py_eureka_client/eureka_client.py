@@ -13,9 +13,9 @@ from threading import Timer
 from threading import RLock
 from threading import Thread
 try:
-    from urllib.parse import urlparse
+    from urllib.parse import quote
 except ImportError:
-    from urlparse import urlparse
+    from urllib import quote
 
 from py_eureka_client.logger import get_logger
 import py_eureka_client.http_client as http_client
@@ -318,21 +318,21 @@ def register(eureka_server, instance):
 
 
 def _register(eureka_server, instance_dic):
-    req = http_client.Request(_format_url(eureka_server) + "apps/%s" % instance_dic["app"])
+    req = http_client.Request(_format_url(eureka_server) + "apps/%s" % quote(instance_dic["app"]))
     req.add_header('Content-Type', 'application/json')
     req.get_method = lambda: "POST"
     http_client.load(req, json.dumps({"instance": instance_dic}).encode(_DEFAULT_ENCODING), timeout=_DEFAULT_TIME_OUT)
 
 
 def cancel(eureka_server, app_name, instance_id):
-    req = http_client.Request(_format_url(eureka_server) + "apps/%s/%s" % (app_name, instance_id))
+    req = http_client.Request(_format_url(eureka_server) + "apps/%s/%s" % (quote(app_name), quote(instance_id)))
     req.get_method = lambda: "DELETE"
     http_client.load(req, timeout=_DEFAULT_TIME_OUT)
 
 
 def send_heart_beat(eureka_server, app_name, instance_id, last_dirty_timestamp, status=INSTANCE_STATUS_UP, overriddenstatus=""):
     url = _format_url(eureka_server) + "apps/%s/%s/status?value=%s&lastDirtyTimestamp=%s" % \
-        (app_name, instance_id, status, str(last_dirty_timestamp))
+        (quote(app_name), quote(instance_id), status, str(last_dirty_timestamp))
     _logger.debug("heartbeat url::" + url)
     if overriddenstatus != "":
         url += "&overriddenstatus=" + overriddenstatus
@@ -344,7 +344,7 @@ def send_heart_beat(eureka_server, app_name, instance_id, last_dirty_timestamp, 
 
 def status_update(eureka_server, app_name, instance_id, last_dirty_timestamp, status):
     url = _format_url(eureka_server) + "apps/%s/%s?status=%s&lastDirtyTimestamp=%s" % \
-        (app_name, instance_id, status, str(last_dirty_timestamp))
+        (quote(app_name), quote(instance_id), status, str(last_dirty_timestamp))
 
     req = http_client.Request(url)
     req.get_method = lambda: "PUT"
@@ -353,7 +353,7 @@ def status_update(eureka_server, app_name, instance_id, last_dirty_timestamp, st
 
 def delete_status_override(eureka_server, app_name, instance_id, last_dirty_timestamp):
     url = _format_url(eureka_server) + "apps/%s/%s/status?lastDirtyTimestamp=%s" % \
-        (app_name, instance_id, str(last_dirty_timestamp))
+        (quote(app_name), quote(instance_id), str(last_dirty_timestamp))
 
     req = http_client.Request(url)
     req.get_method = lambda: "DELETE"
