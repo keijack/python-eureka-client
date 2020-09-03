@@ -330,21 +330,11 @@ def cancel(eureka_server, app_name, instance_id):
     http_client.load(req, timeout=_DEFAULT_TIME_OUT)
 
 
-def send_heart_beat(eureka_server, app_name, instance_id, last_dirty_timestamp, status=INSTANCE_STATUS_UP, overriddenstatus=""):
+def status_update(eureka_server, app_name, instance_id, last_dirty_timestamp, status=INSTANCE_STATUS_UP, overriddenstatus=""):
     url = _format_url(eureka_server) + "apps/%s/%s/status?value=%s&lastDirtyTimestamp=%s" % \
         (quote(app_name), quote(instance_id), status, str(last_dirty_timestamp))
-    _logger.debug("heartbeat url::" + url)
     if overriddenstatus != "":
         url += "&overriddenstatus=" + overriddenstatus
-
-    req = http_client.Request(url)
-    req.get_method = lambda: "PUT"
-    http_client.load(req, timeout=_DEFAULT_TIME_OUT)
-
-
-def status_update(eureka_server, app_name, instance_id, last_dirty_timestamp, status):
-    url = _format_url(eureka_server) + "apps/%s/%s?status=%s&lastDirtyTimestamp=%s" % \
-        (quote(app_name), quote(instance_id), status, str(last_dirty_timestamp))
 
     req = http_client.Request(url)
     req.get_method = lambda: "PUT"
@@ -716,9 +706,9 @@ class RegistryClient:
         else:
             self.__alive = False
 
-    def send_heart_beat(self, overridden_status=""):
+    def send_heartbeat(self, overridden_status=""):
         try:
-            self.__try_all_eureka_server(lambda url: send_heart_beat(url, self.__instance["app"],
+            self.__try_all_eureka_server(lambda url: status_update(url, self.__instance["app"],
                                                                      self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"],
                                                                      status=self.__instance["status"], overriddenstatus=overridden_status))
         except:
@@ -754,7 +744,7 @@ class RegistryClient:
     def __heart_beat(self):
         while True:
             _logger.debug("sending heart beat to spring cloud server ")
-            self.send_heart_beat()
+            self.send_heartbeat()
             time.sleep(self.__instance["leaseInfo"]["renewalIntervalInSecs"])
 
 
