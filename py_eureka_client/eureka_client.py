@@ -139,11 +139,7 @@ class Application:
     @property
     def up_instances(self):
         with self.__inst_lock:
-            up_inst = []
-            for item in self.__instances:
-                if item.status == INSTANCE_STATUS_UP:
-                    up_inst.append(item)
-            return up_inst
+            return [item for item in self.__instances if item.status == INSTANCE_STATUS_UP]
 
     def get_instance(self, instance_id):
         with self.__inst_lock:
@@ -709,8 +705,8 @@ class RegistryClient:
     def send_heartbeat(self, overridden_status=""):
         try:
             self.__try_all_eureka_server(lambda url: status_update(url, self.__instance["app"],
-                                                                     self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"],
-                                                                     status=self.__instance["status"], overriddenstatus=overridden_status))
+                                                                   self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"],
+                                                                   status=self.__instance["status"], overriddenstatus=overridden_status))
         except:
             _logger.exception("Error!")
             _logger.info("Cannot send heartbeat to server, try to register")
