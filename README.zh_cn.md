@@ -1,5 +1,7 @@
 # python-eureka-client
 
+[![PyPI version](https://badge.fury.io/py/py-eureka-client.svg)](https://badge.fury.io/py/py-eureka-client)
+
 ## 描述
 
 这是一个使用 Python 语言编写的 eureka 客户端，你可以非常简单的使得它与你的其他 Spring Cloud 组件集成在一起。
