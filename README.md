@@ -1,6 +1,6 @@
 # python-eureka-client
 
-[![PyPI version](https://badge.fury.io/py/py-eureka-client.svg)](https://badge.fury.io/py/py-eureka-client)
+[![PyPI version](https://badge.fury.io/py/py-eureka-client.png)](https://badge.fury.io/py/py-eureka-client)
 
 ## Discription
 
