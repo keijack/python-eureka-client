@@ -1,7 +1,5 @@
 # python-eureka-client
 
-[![PyPI version](https://badge.fury.io/py/py-eureka-client.png)](https://badge.fury.io/py/py-eureka-client)
-
 ## Discription
 
 This is an eureka client written in python, you can easily intergrate your python components with spring cloud.
@@ -13,7 +11,7 @@ Python 2.7 / 3.6+ (It should also work at 3.5, not test)
 ## Why choose
 
 * Register your python components to eureka server.
-* Support multiple eureka server registration.
+* Support failover.
 * Send heartbeat to eureka server.
 * Auto unregister from eureka server when your server down.
 * Discovery apps from eureka server.
