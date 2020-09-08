@@ -1,5 +1,7 @@
 # python-eureka-client
 
+[![PyPI version](https://badge.fury.io/py/py-eureka-client.svg)](https://badge.fury.io/py/py-eureka-client)
+
 ## Discription
 
 This is an eureka client written in python, you can easily intergrate your python components with spring cloud.
