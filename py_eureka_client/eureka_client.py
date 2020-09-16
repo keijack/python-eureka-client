@@ -742,6 +742,14 @@ class EurekaClient:
         self.__application_mth_lock = RLock()
 
     @property
+    def should_register(self):
+        return self.__should_register
+
+    @property
+    def should_discover(self):
+        return self.__should_discover
+
+    @property
     def applications(self):
         with self.__application_mth_lock:
             if self.__applications is None:
@@ -1227,11 +1235,11 @@ def init_discovery_client(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
     """
     Deprecated， use `init` instead
     """
-    return init(eureka_server=eureka_server, 
-        should_register=False,
-        remote_regions=regions, 
-        renewal_interval_in_secs=renewal_interval_in_secs, 
-        ha_strategy=ha_strategy)
+    return init(eureka_server=eureka_server,
+                should_register=False,
+                remote_regions=regions,
+                renewal_interval_in_secs=renewal_interval_in_secs,
+                ha_strategy=ha_strategy)
 
 
 def get_client():
@@ -1244,17 +1252,15 @@ def get_client():
 
 
 def get_registry_client():
-    """
-    Deprecated， use `get_client` instead
-    """
-    return get_client()
+    cli = get_client()
+    if cli.should_register:
+        return cli
 
 
 def get_discovery_client():
-    """
-    Deprecated， use `get_client` instead
-    """
-    return get_client()
+    cli = get_client()
+    if cli.should_discover:
+        return cli
 
 
 def walk_nodes_async(app_name="", service="", prefer_ip=False, prefer_https=False, walker=None, on_success=None, on_error=None):
@@ -1309,12 +1315,9 @@ def do_service(app_name="", service="", return_type="string",
 
 
 def stop():
-    register_cli = get_registry_client()
-    if register_cli is not None:
-        register_cli.stop()
-    discovery_client = get_discovery_client()
-    if discovery_client is not None:
-        discovery_client.stop()
+    client = get_client()
+    if client is not None:
+        client.stop()
 
 
 @atexit.register
