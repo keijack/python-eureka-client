@@ -8,6 +8,7 @@ import socket
 import time
 import random
 import inspect
+from copy import copy
 import xml.etree.ElementTree as ElementTree
 from threading import Timer
 from threading import RLock
@@ -17,8 +18,11 @@ try:
 except ImportError:
     from urllib import quote
 
+
 from py_eureka_client.logger import get_logger
+from py_eureka_client.__dns_txt_resolver import get_txt_dns_record
 import py_eureka_client.http_client as http_client
+
 
 try:
     long(0)
@@ -528,11 +532,111 @@ def _current_time_millis():
 """====================== Registry Client ======================================="""
 
 
-class RegistryClient:
+class EurekaServerConf(object):
+
+    def __init__(self,
+                 eureka_servers=_DEFAULT_EUREKA_SERVER_URL,
+                 eureka_domain="",
+                 eureka_protocol="http",
+                 eureka_basic_auth_user="",
+                 eureka_basic_auth_password="",
+                 eureka_context="eureka/v2",
+                 eureka_availability_zones={},
+                 region="",
+                 zone=""):
+        self.__servers = {}
+        self.region = region
+        self.zone = zone
+        if eureka_domain:
+            zone_urls = get_txt_dns_record("txt.%s.%s" % (region, eureka_domain))
+            for zone_url in zone_urls:
+                zone_name = zone_url.split(".")[0]
+                eureka_urls = get_txt_dns_record("txt.%s" % zone_url)
+                self.__servers[zone_name] = [self._format_url(eureka_url.strip(), eureka_protocol, eureka_basic_auth_user,
+                                                              eureka_basic_auth_password, eureka_context) for eureka_url in eureka_urls]
+        elif eureka_availability_zones:
+            for zone_name, v in eureka_availability_zones.items():
+                if isinstance(v, list):
+                    eureka_urls = v
+                else:
+                    eureka_urls = str(v).split(",")
+                self.__servers[zone_name] = [self._format_url(eureka_url.strip(), eureka_protocol, eureka_basic_auth_user,
+                                                              eureka_basic_auth_password, eureka_context) for eureka_url in eureka_urls]
+        else:
+            self.__servers[zone if zone else "defaultZone"] = [self._format_url(eureka_url.strip(), eureka_protocol, eureka_basic_auth_user,
+                                                                                eureka_basic_auth_password, eureka_context) for eureka_url in eureka_servers.split(",")]
+        self.__servers_not_in_zone = copy(self.__servers)
+        if zone in self.__servers_not_in_zone:
+            del self.__servers_not_in_zone[zone]
+
+    def _format_url(self, server_url="", eureka_protocol="http",
+                    eureka_basic_auth_user="",
+                    eureka_basic_auth_password="",
+                    eureka_context="eureka/v2"):
+        url = server_url
+        if url.endswith('/'):
+            url = url[0: -1]
+        if url.find("://") > 0:
+            prtl, url = tuple(url.split("://"))
+        else:
+            prtl = eureka_protocol
+
+        if url.find("@") > 0:
+            basic_auth, url = tuple(url.split("@"))
+            if basic_auth.find(":") > 0:
+                user, password = tuple(basic_auth.split(":"))
+            else:
+                user = basic_auth
+                password = ""
+        else:
+            user = quote(eureka_basic_auth_user)
+            password = quote(eureka_basic_auth_password)
+
+        basic_auth = ""
+        if user:
+            if password:
+                basic_auth = user + ":" + password
+            else:
+                basic_auth = user
+            basic_auth += "@"
+
+        if url.find("/") > 0:
+            ctx = ""
+        else:
+            ctx = eureka_context if eureka_context.startswith('/') else "/" + eureka_context
+
+        return "%s://%s%s%s" % (prtl, basic_auth, url, ctx)
+
+    @property
+    def servers(self):
+        return self.__servers
+
+    @property
+    def servers_in_zone(self):
+        if self.zone in self.servers:
+            return self.servers[self.zone]
+        else:
+            return []
+
+    @property
+    def servers_not_in_zone(self):
+        return self.__servers_not_in_zone
+
+    def servers_ont_in_zones(self, zones=[]):
+        svs = copy(self.servers)
+        for zone in zones:
+            if zone in svs:
+                del svs[zone]
+        return svs
+
+
+class EurekaClient:
     """Eureka client for spring cloud"""
 
     def __init__(self,
                  eureka_server=_DEFAULT_EUREKA_SERVER_URL,
+                 should_register=True,
+                 should_discover=True,
                  app_name="",
                  instance_id="",
                  instance_host="",
@@ -552,29 +656,40 @@ class RegistryClient:
                  vip_adr="",
                  secure_vip_addr="",
                  is_coordinating_discovery_server=False,
-                 metadata={}):
+                 metadata={},
+                 remote_regions=[],
+                 ha_strategy=HA_STRATEGY_RANDOM):
         assert eureka_server is not None and eureka_server != "", "eureka server must be specified."
-        assert app_name is not None and app_name != "", "application name must be specified."
-        assert instance_port > 0, "port is unvalid"
+        assert app_name is not None and app_name != "" if should_register else True, "application name must be specified."
+        assert instance_port > 0 if should_register else True, "port is unvalid"
         assert isinstance(metadata, dict), "metadata must be dict"
+        assert ha_strategy in [HA_STRATEGY_RANDOM, HA_STRATEGY_STICK,
+                               HA_STRATEGY_OTHER] if should_discover else True, "do not support strategy %d " % ha_strategy
 
         self.__net_lock = RLock()
         self.__eureka_servers = eureka_server.split(",")
+        self.__should_register = should_register
+        self.__should_discover = should_discover
+        self.__alive = False
+        self.__heartbeat_timer = Timer(renewal_interval_in_secs, self.__heartbeat)
+        self.__heartbeat_timer.daemon = True
 
         def try_to_get_client_ip(url):
             if instance_host == "" and instance_ip == "":
-                self.__instance_host = self.__instance_ip = RegistryClient.__get_instance_ip(url)
+                self.__instance_host = self.__instance_ip = EurekaClient.__get_instance_ip(url)
             elif instance_host != "" and instance_ip == "":
                 self.__instance_host = instance_host
-                if RegistryClient.__is_ip(instance_host):
+                if EurekaClient.__is_ip(instance_host):
                     self.__instance_ip = instance_host
                 else:
-                    self.__instance_ip = RegistryClient.__get_instance_ip(url)
+                    self.__instance_ip = EurekaClient.__get_instance_ip(url)
             else:
                 self.__instance_host = instance_ip
                 self.__instance_ip = instance_ip
 
-        self.__try_all_eureka_server(try_to_get_client_ip)
+        # For Registery
+        if should_register:
+            self.__try_all_eureka_server(try_to_get_client_ip)
 
         mdata = {
             'management.port': str(instance_port)
@@ -607,18 +722,31 @@ class RegistryClient:
                 'serviceUpTimestamp': 0
             },
             'metadata': mdata,
-            'homePageUrl': RegistryClient.__format_url(home_page_url, self.__instance_host, instance_port),
-            'statusPageUrl': RegistryClient.__format_url(status_page_url, self.__instance_host, instance_port, "info"),
-            'healthCheckUrl': RegistryClient.__format_url(health_check_url, self.__instance_host, instance_port, "health"),
+            'homePageUrl': EurekaClient.__format_url(home_page_url, self.__instance_host, instance_port),
+            'statusPageUrl': EurekaClient.__format_url(status_page_url, self.__instance_host, instance_port, "info"),
+            'healthCheckUrl': EurekaClient.__format_url(health_check_url, self.__instance_host, instance_port, "health"),
             'secureHealthCheckUrl': secure_health_check_url,
             'vipAddress': vip_adr if vip_adr != "" else app_name.lower(),
             'secureVipAddress': secure_vip_addr if secure_vip_addr != "" else app_name.lower(),
             'isCoordinatingDiscoveryServer': str(is_coordinating_discovery_server).lower()
         }
 
-        self.__alive = False
-        self.__heart_beat_timer = Timer(renewal_interval_in_secs, self.__heart_beat)
-        self.__heart_beat_timer.daemon = True
+        # For discovery
+        self.__eureka_servers = eureka_server.split(",")
+        self.__remote_regions = remote_regions if remote_regions is not None else []
+        self.__applications = None
+        self.__delta = None
+        self.__ha_strategy = ha_strategy
+        self.__ha_cache = {}
+
+        self.__application_mth_lock = RLock()
+
+    @property
+    def applications(self):
+        with self.__application_mth_lock:
+            if self.__applications is None:
+                self.__pull_full_registry()
+            return self.__applications
 
     def __try_all_eureka_server(self, fun):
         with self.__net_lock:
@@ -724,145 +852,27 @@ class RegistryClient:
         self.__try_all_eureka_server(lambda url: delete_status_override(
             url, self.__instance["app"], self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"]))
 
-    def start(self):
+    def __start_registery(self):
         _logger.debug("start to registry client...")
         self.register()
-        self.__heart_beat_timer.start()
 
-    def stop(self):
+    def __stop_registery(self):
         if self.__alive:
-            _logger.debug("stopping client...")
-            if self.__heart_beat_timer.isAlive():
-                self.__heart_beat_timer.cancel()
             self.register(status=INSTANCE_STATUS_DOWN)
             self.cancel()
 
-    def __heart_beat(self):
-        while True:
-            _logger.debug("sending heart beat to spring cloud server ")
-            self.send_heartbeat()
-            time.sleep(self.__instance["leaseInfo"]["renewalIntervalInSecs"])
-
-
-__cache_key = "default"
-__cache_registry_clients = {}
-__cache_registry_clients_lock = RLock()
-
-
-def init_registry_client(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
-                         app_name="",
-                         instance_id="",
-                         instance_host="",
-                         instance_ip="",
-                         instance_port=_DEFAULT_INSTNACE_PORT,
-                         instance_unsecure_port_enabled=True,
-                         instance_secure_port=_DEFAULT_INSTNACE_SECURE_PORT,
-                         instance_secure_port_enabled=False,
-                         countryId=1,  # @deprecaded
-                         data_center_name=_DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
-                         renewal_interval_in_secs=_RENEWAL_INTERVAL_IN_SECS,
-                         duration_in_secs=_DURATION_IN_SECS,
-                         home_page_url="",
-                         status_page_url="",
-                         health_check_url="",
-                         secure_health_check_url="",
-                         vip_adr="",
-                         secure_vip_addr="",
-                         is_coordinating_discovery_server=False,
-                         metadata={}):
-    with __cache_registry_clients_lock:
-        client = RegistryClient(eureka_server=eureka_server,
-                                app_name=app_name,
-                                instance_id=instance_id,
-                                instance_host=instance_host,
-                                instance_ip=instance_ip,
-                                instance_port=instance_port,
-                                instance_unsecure_port_enabled=instance_unsecure_port_enabled,
-                                instance_secure_port=instance_secure_port,
-                                instance_secure_port_enabled=instance_secure_port_enabled,
-                                countryId=countryId,
-                                data_center_name=data_center_name,
-                                renewal_interval_in_secs=renewal_interval_in_secs,
-                                duration_in_secs=duration_in_secs,
-                                home_page_url=home_page_url,
-                                status_page_url=status_page_url,
-                                health_check_url=health_check_url,
-                                secure_health_check_url=secure_health_check_url,
-                                vip_adr=vip_adr,
-                                secure_vip_addr=secure_vip_addr,
-                                is_coordinating_discovery_server=is_coordinating_discovery_server,
-                                metadata=metadata)
-        __cache_registry_clients[__cache_key] = client
-        client.start()
-        return client
-
-
-def get_registry_client():
-    # type () -> RegistryClient
-    with __cache_registry_clients_lock:
-        if __cache_key in __cache_registry_clients:
-            return __cache_registry_clients[__cache_key]
-        else:
-            return None
-
-
-"""======================== Cached Discovery Client ============================"""
-
-
-class DiscoveryClient:
-    """Discover the apps registered in spring cloud server, this class will do some cached, if you want to get the apps immediatly, use the global functions"""
-
-    def __init__(self, eureka_server, regions=None, renewal_interval_in_secs=_RENEWAL_INTERVAL_IN_SECS, ha_strategy=HA_STRATEGY_RANDOM):
-        assert ha_strategy in [HA_STRATEGY_RANDOM, HA_STRATEGY_STICK, HA_STRATEGY_OTHER], "do not support strategy %d " % ha_strategy
-        self.__eureka_servers = eureka_server.split(",")
-        self.__regions = regions if regions is not None else []
-        self.__cache_time_in_secs = renewal_interval_in_secs
-        self.__applications = None
-        self.__delta = None
-        self.__ha_strategy = ha_strategy
-        self.__ha_cache = {}
-        self.__timer = Timer(self.__cache_time_in_secs, self.__heartbeat)
-        self.__timer.daemon = True
-        self.__application_mth_lock = RLock()
-        self.__net_lock = RLock()
-
     def __heartbeat(self):
         while True:
-            self.__fetch_delta()
-            time.sleep(self.__cache_time_in_secs)
-
-    @property
-    def applications(self):
-        with self.__application_mth_lock:
-            if self.__applications is None:
-                self.__pull_full_registry()
-            return self.__applications
-
-    def __try_all_eureka_server(self, fun):
-        with self.__net_lock:
-            untry_servers = self.__eureka_servers
-            tried_servers = []
-            ok = False
-            while len(untry_servers) > 0:
-                url = untry_servers[0].strip()
-                try:
-                    fun(url)
-                except (http_client.HTTPError, http_client.URLError):
-                    _logger.warn("Eureka server [%s] is down, use next url to try." % url)
-                    tried_servers.append(url)
-                    untry_servers = untry_servers[1:]
-                else:
-                    ok = True
-                    break
-            if len(tried_servers) > 0:
-                untry_servers.extend(tried_servers)
-                self.__eureka_servers = untry_servers
-            if not ok:
-                raise http_client.URLError("All eureka servers are down!")
+            if self.__should_register:
+                _logger.debug("sending heart beat to spring cloud server ")
+                self.send_heartbeat()
+            if self.__should_discover:
+                self.__fetch_delta()
+            time.sleep(self.__instance["leaseInfo"]["renewalIntervalInSecs"])
 
     def __pull_full_registry(self):
         def do_pull(url):  # the actual function body
-            self.__applications = get_applications(url, self.__regions)
+            self.__applications = get_applications(url, self.__remote_regions)
             self.__delta = self.__applications
         self.__try_all_eureka_server(do_pull)
 
@@ -871,7 +881,7 @@ class DiscoveryClient:
             if self.__applications is None or len(self.__applications.applications) == 0:
                 self.__pull_full_registry()
                 return
-            delta = get_delta(url, self.__regions)
+            delta = get_delta(url, self.__remote_regions)
             _logger.debug("delta got: v.%s::%s" % (delta.versionsDelta, delta.appsHashcode))
             if self.__delta is not None \
                     and delta.versionsDelta == self.__delta.versionsDelta \
@@ -1080,39 +1090,31 @@ class DiscoveryClient:
 
         return "%s://%s:%d/" % (schema, host, port)
 
-    def start(self):
+    def __start_discover(self):
         self.__pull_full_registry()
-        self.__timer.start()
+
+    def start(self):
+        if self.__should_register:
+            self.__start_registery()
+        if self.__should_discover:
+            self.__start_discover()
+        self.__heartbeat_timer.start()
 
     def stop(self):
-        if self.__timer.isAlive():
-            self.__timer.cancel()
+        if self.__heartbeat_timer.isAlive():
+            self.__heartbeat_timer.cancel()
+        if self.__should_register:
+            self.__stop_registery()
 
 
-__cache_discovery_clients = {}
-__cache_discovery_clients_lock = RLock()
-
-
-def init_discovery_client(eureka_server=_DEFAULT_EUREKA_SERVER_URL, regions=[], renewal_interval_in_secs=_RENEWAL_INTERVAL_IN_SECS, ha_strategy=HA_STRATEGY_RANDOM):
-    with __cache_discovery_clients_lock:
-        assert __cache_key not in __cache_discovery_clients, "Client has already been initialized."
-        cli = DiscoveryClient(eureka_server, regions=regions, renewal_interval_in_secs=renewal_interval_in_secs, ha_strategy=ha_strategy)
-        cli.start()
-        __cache_discovery_clients[__cache_key] = cli
-        return cli
-
-
-def get_discovery_client():
-    # type: (str) -> DiscoveryClient
-    with __cache_discovery_clients_lock:
-        if __cache_key in __cache_discovery_clients:
-            return __cache_discovery_clients[__cache_key]
-        else:
-            return None
+__cache_key = "default"
+__cache_clients = {}
+__cache_clients_lock = RLock()
 
 
 def init(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
-         regions=[],
+         should_register=True,
+         should_discover=True,
          app_name="",
          instance_id="",
          instance_host="",
@@ -1133,33 +1135,126 @@ def init(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
          secure_vip_addr="",
          is_coordinating_discovery_server=False,
          metadata={},
+         regions=[],  # @deprecated
+         remote_regions=[],
          ha_strategy=HA_STRATEGY_RANDOM):
-    registry_client = init_registry_client(eureka_server=eureka_server,
-                                           app_name=app_name,
-                                           instance_id=instance_id,
-                                           instance_host=instance_host,
-                                           instance_ip=instance_ip,
-                                           instance_port=instance_port,
-                                           instance_unsecure_port_enabled=instance_unsecure_port_enabled,
-                                           instance_secure_port=instance_secure_port,
-                                           instance_secure_port_enabled=instance_secure_port_enabled,
-                                           countryId=countryId,
-                                           data_center_name=data_center_name,
-                                           renewal_interval_in_secs=renewal_interval_in_secs,
-                                           duration_in_secs=duration_in_secs,
-                                           home_page_url=home_page_url,
-                                           status_page_url=status_page_url,
-                                           health_check_url=health_check_url,
-                                           secure_health_check_url=secure_health_check_url,
-                                           vip_adr=vip_adr,
-                                           secure_vip_addr=secure_vip_addr,
-                                           is_coordinating_discovery_server=is_coordinating_discovery_server,
-                                           metadata=metadata)
-    discovery_client = init_discovery_client(eureka_server,
-                                             regions=regions,
-                                             renewal_interval_in_secs=renewal_interval_in_secs,
-                                             ha_strategy=ha_strategy)
-    return registry_client, discovery_client
+    with __cache_clients_lock:
+        r = regions if isinstance(regions, list) else []
+        rr = remote_regions if isinstance(remote_regions, list) else []
+        rr = r + rr
+        client = EurekaClient(eureka_server=eureka_server,
+                              should_register=should_register,
+                              should_discover=should_discover,
+                              app_name=app_name,
+                              instance_id=instance_id,
+                              instance_host=instance_host,
+                              instance_ip=instance_ip,
+                              instance_port=instance_port,
+                              instance_unsecure_port_enabled=instance_unsecure_port_enabled,
+                              instance_secure_port=instance_secure_port,
+                              instance_secure_port_enabled=instance_secure_port_enabled,
+                              countryId=countryId,
+                              data_center_name=data_center_name,
+                              renewal_interval_in_secs=renewal_interval_in_secs,
+                              duration_in_secs=duration_in_secs,
+                              home_page_url=home_page_url,
+                              status_page_url=status_page_url,
+                              health_check_url=health_check_url,
+                              secure_health_check_url=secure_health_check_url,
+                              vip_adr=vip_adr,
+                              secure_vip_addr=secure_vip_addr,
+                              is_coordinating_discovery_server=is_coordinating_discovery_server,
+                              metadata=metadata,
+                              remote_regions=rr,
+                              ha_strategy=ha_strategy)
+        __cache_clients[__cache_key] = client
+        client.start()
+        return client
+
+
+def init_registry_client(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
+                         app_name="",
+                         instance_id="",
+                         instance_host="",
+                         instance_ip="",
+                         instance_port=_DEFAULT_INSTNACE_PORT,
+                         instance_unsecure_port_enabled=True,
+                         instance_secure_port=_DEFAULT_INSTNACE_SECURE_PORT,
+                         instance_secure_port_enabled=False,
+                         countryId=1,  # @deprecaded
+                         data_center_name=_DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
+                         renewal_interval_in_secs=_RENEWAL_INTERVAL_IN_SECS,
+                         duration_in_secs=_DURATION_IN_SECS,
+                         home_page_url="",
+                         status_page_url="",
+                         health_check_url="",
+                         secure_health_check_url="",
+                         vip_adr="",
+                         secure_vip_addr="",
+                         is_coordinating_discovery_server=False,
+                         metadata={}):
+    """
+    Deprecated， use `init` instead
+    """
+    return init(eureka_server=eureka_server,
+                should_discover=False,
+                app_name=app_name,
+                instance_id=instance_id,
+                instance_host=instance_host,
+                instance_ip=instance_ip,
+                instance_port=instance_port,
+                instance_unsecure_port_enabled=instance_unsecure_port_enabled,
+                instance_secure_port=instance_secure_port,
+                instance_secure_port_enabled=instance_secure_port_enabled,
+                countryId=countryId,
+                data_center_name=data_center_name,
+                renewal_interval_in_secs=renewal_interval_in_secs,
+                duration_in_secs=duration_in_secs,
+                home_page_url=home_page_url,
+                status_page_url=status_page_url,
+                health_check_url=health_check_url,
+                secure_health_check_url=secure_health_check_url,
+                vip_adr=vip_adr,
+                secure_vip_addr=secure_vip_addr,
+                is_coordinating_discovery_server=is_coordinating_discovery_server,
+                metadata=metadata)
+
+
+def init_discovery_client(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
+                          regions=[],  # Deprecated
+                          renewal_interval_in_secs=_RENEWAL_INTERVAL_IN_SECS,
+                          ha_strategy=HA_STRATEGY_RANDOM):
+    """
+    Deprecated， use `init` instead
+    """
+    return init(eureka_server=eureka_server, 
+        should_register=False,
+        remote_regions=regions, 
+        renewal_interval_in_secs=renewal_interval_in_secs, 
+        ha_strategy=ha_strategy)
+
+
+def get_client():
+    # type () -> EurekaClient
+    with __cache_clients_lock:
+        if __cache_key in __cache_clients:
+            return __cache_clients[__cache_key]
+        else:
+            return None
+
+
+def get_registry_client():
+    """
+    Deprecated， use `get_client` instead
+    """
+    return get_client()
+
+
+def get_discovery_client():
+    """
+    Deprecated， use `get_client` instead
+    """
+    return get_client()
 
 
 def walk_nodes_async(app_name="", service="", prefer_ip=False, prefer_https=False, walker=None, on_success=None, on_error=None):
@@ -1224,13 +1319,8 @@ def stop():
 
 @atexit.register
 def _cleanup_before_exist():
-    if len(__cache_registry_clients) > 0:
-        _logger.debug("cleaning up registry clients")
-        for k, cli in __cache_registry_clients.items():
-            _logger.debug("try to stop cache registry client [%s] this will also unregister this client from the eureka server" % k)
-            cli.stop()
-    if len(__cache_discovery_clients) > 0:
-        _logger.debug("cleaning up discovery clients")
-        for k, cli in __cache_discovery_clients.items():
-            _logger.debug("try to stop cache discovery client [%s] this will also unregister this client from the eureka server" % k)
+    if len(__cache_clients) > 0:
+        _logger.debug("cleaning up clients")
+        for k, cli in __cache_clients.items():
+            _logger.debug("try to stop cache client [%s] this will also unregister this client from the eureka server" % k)
             cli.stop()
