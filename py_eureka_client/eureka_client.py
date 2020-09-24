@@ -826,8 +826,10 @@ class EurekaClient:
         try:
             self.__try_all_eureka_server(lambda url: _register(url, self.__instance))
         except:
-            _logger.exception("error!")
+            self.__alive = False
+            _logger.exception("register error!")
         else:
+            _logger.debug("register successfully!")
             self.__alive = True
 
     def cancel(self):
@@ -839,6 +841,9 @@ class EurekaClient:
             self.__alive = False
 
     def send_heartbeat(self, overridden_status=""):
+        if not self.__alive:
+            self.register()
+            return
         try:
             self.__try_all_eureka_server(lambda url: status_update(url, self.__instance["app"],
                                                                    self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"],
@@ -872,9 +877,10 @@ class EurekaClient:
     def __heartbeat(self):
         while True:
             if self.__should_register:
-                _logger.debug("sending heart beat to spring cloud server ")
+                _logger.debug("sending heartbeat to eureka server ")
                 self.send_heartbeat()
             if self.__should_discover:
+                _logger.debug("loading services from  eureka server")
                 self.__fetch_delta()
             time.sleep(self.__instance["leaseInfo"]["renewalIntervalInSecs"])
 
@@ -882,7 +888,10 @@ class EurekaClient:
         def do_pull(url):  # the actual function body
             self.__applications = get_applications(url, self.__remote_regions)
             self.__delta = self.__applications
-        self.__try_all_eureka_server(do_pull)
+        try:
+            self.__try_all_eureka_server(do_pull)
+        except:
+            _logger.exception("pull full registry from eureka server error!")
 
     def __fetch_delta(self):
         def do_fetch(url):
@@ -899,7 +908,11 @@ class EurekaClient:
             self.__delta = delta
             if not self.__is_hash_match():
                 self.__pull_full_registry()
-        self.__try_all_eureka_server(do_fetch)
+        try:
+            self.__try_all_eureka_server(do_fetch)
+        except:
+            _logger.exception("fetch delta from eureka server error!")
+
 
     def __is_hash_match(self):
         app_hash = self.__get_applications_hash()
