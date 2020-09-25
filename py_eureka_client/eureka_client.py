@@ -1115,7 +1115,7 @@ class EurekaClient(object):
             ups = app.up_instances
             if ups:
                 _logger.debug("app[%s]'s all up instances are: %s" % (application_name, str([ins.instanceId for ins in ups])))
-                app_ups = app_ups.extend()
+                app_ups = app_ups.extend(ups)
         
         up_instances = []
         if ignore_instance_ids is None or len(ignore_instance_ids) == 0:
