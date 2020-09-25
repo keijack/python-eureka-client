@@ -14,6 +14,7 @@ Python 2.7 / 3.6+ (3.5 也应该支持，但未测试)
 
 * 同时支持注册以及发现服务。
 * 支持故障切换。
+* 支持DNS发现。
 * 非常简单的配置过程，堪比 Springboot 的配置文件。
 * 自动化的心跳以及组件状态机制，不需要开发者维护心跳。
 * 自动化的退出机制。只要 Python 进程正常退出，组件会自己从 eureka 服务器退出。
@@ -30,7 +31,7 @@ pip install py_eureka_client
 
 ### 推荐使用
 
-通过以下代码，你可以同时使用注册以及发现服务：
+最简单的使用方法如下：
 
 ```python
 import py_eureka_client.eureka_client as eureka_client
@@ -47,10 +48,6 @@ eureka_client.init(eureka_server="http://your-eureka-server-peer1,http://your-eu
                    ha_strategy=eureka_client.HA_STRATEGY_RANDOM)
 ```
 
-*上述接口还支持更多的参数，请参考源代码，这个参数的大部分`Instance`对象的参数，参考以下`仅注册服务`的相关说明。*
-
-*`ha_stratergy`参数中所需要的更多策略请参考以下`仅发现服务`的相关说明。*
-
 在你的业务代码中，通过以下的方法调用其他组件的服务
 
 ```python
@@ -62,11 +59,25 @@ res = eureka_client.do_service("OTHER-SERVICE-NAME", "/service/context/path",
 print("result of other service" + res)
 ```
 
-*更多使用发现服务的方法，请参照`使用发现服务`章节。*
+你也可以直接使用 `EurekaClient` 类。
 
-### 仅注册服务
+```python
+from py_eureka_client.eureka_client import EurekaClient
+client = EurekaClient(eureka_server="http://my_eureka_server_peer_1/eureka/v2,http://my_eureka_server_peer_2/eureka/v2", app_name="python_module_1", instance_port=9090)
+client.start()
+res = client.do_service("OTHER-SERVICE-NAME", "/service/context/path")
+print("result of other service" + res)
+# when server is shutted down:
+client.stop()
+```
 
-如果你的组件仅提供服务，不需要发现其他的组件，那么你可以仅将你的组件注册到 eureka 服务中而无需初始化发现服务。
+事实上，`init` 和相关的方法只是 `EurekaClient` 的一个门面（facade），其底层最终还是包含这一个 `EurekaClient` 的实例对象。你可以接收 `init` 方法的返回值，或者使用 `eureka_client.get_client()` 取得这个对象。`init` 会自动开始注册、心跳流程，并且会在程序退出的时候自动发送退出信号。而如果你 直接使用 `EurekaClient` 对象，你需要显式调用`start()` 和 `stop()` 方法来开始和停止注册过程。
+
+*在接下来的文档中，我会仅使用门面（facade）函数作为例子，事实上，你可以从 `EurekaClient` 类中找到这些函数对应的方法。*
+
+### 注册服务
+
+最常用的注册方法是：
 
 ```Python
 import py_eureka_client.eureka_client as eureka_client
@@ -80,8 +91,6 @@ eureka_client.init_registry_client(eureka_server=eureka_server_list,
                                 instance_host=your_rest_server_host,
                                 instance_port=your_rest_server_port)
 ```
-
-*上述方法中，你还可以传入本节点更多`Instance`对象的参数，请参考 eureka 接口定义或者代码。*
 
 你还可以不传入`instance_host`参数，如果不传入那个参数，组件会根据当前的网络取得一个 ip 作为参数。
 
@@ -97,9 +106,95 @@ eureka_client.init_registry_client(eureka_server="http://your-eureka-server-peer
 
 *请注意，如果你将 python 组件和 eureka 服务器部署在一起，计算出来的 ip 会是 `127.0.0.1`，因此在这种情况下，为了保证其他组件能够访问你的组件，请必须指定`instance_host`或者`instance_ip`字段。*
 
-### 发现服务
+如果你有多个 `zone`，你可以通过参数 `eureka_availability_zones` 来进行配置。
 
-如果你的服务不对外提供服务，但是却需要调用其他组件的服务，同时也不需要让 eureka 管理组件状态，那么你可以仅使用发现服务，代码如下：
+```python
+import py_eureka_client.eureka_client as eureka_client
+eureka_client.init(eureka_availability_zones={
+                "us-east-1c": "http://ec2-552-627-568-165.compute-1.amazonaws.com:7001/eureka/v2/,http://ec2-368-101-182-134.compute-1.amazonaws.com:7001/eureka/v2/",
+                "us-east-1d": "http://ec2-552-627-568-170.compute-1.amazonaws.com:7001/eureka/v2/",
+                "us-east-1e": "http://ec2-500-179-285-592.compute-1.amazonaws.com:7001/eureka/v2/"}, 
+                zone="us-east-1c",
+                app_name="python_module_1", 
+                instance_port=9090,
+                data_center_name="Amazon")
+```
+
+但如果你希望更具灵活性，你可以使用 DNS 来配置 Eureka 服务器的 URL。
+
+假设，你有以下的 DNS txt 记录：
+
+```
+txt.us-east-1.mydomaintest.netflix.net="us-east-1c.mydomaintest.netflix.net" "us-east-1d.mydomaintest.netflix.net" "us-east-1e.mydomaintest.netflix.net"
+```
+
+然后，你可以使用 DNS txt 记录 为每个上述的 `zone` 定义实际的 Eureka 服务的 URL：
+
+```
+txt.us-east-1c.mydomaintest.netflix.net="ec2-552-627-568-165.compute-1.amazonaws.com" "ec2-368-101-182-134.compute-1.amazonaws.com"
+txt.us-east-1d.mydomaintest.netflix.net="ec2-552-627-568-170.compute-1.amazonaws.com"
+txt.us-east-1e.mydomaintest.netflix.net="ec2-500-179-285-592.compute-1.amazonaws.com"
+```
+
+之后，你可以通过这样的方式来初始化 eureka client：
+
+```python
+import py_eureka_client.eureka_client as eureka_client
+eureka_client.init(eureka_domain="mydomaintest.netflix.net",
+                region="us-east-1",
+                zone="us-east-1c",
+                app_name="python_module_1", 
+                instance_port=9090,
+                data_center_name="Amazon")
+```
+
+*注意：`py-eureka-client`首先会尝试使用 `dnspython` 来解析 DNS，但是 `dnspython` 从 2.0.0 起就不再支持 python2 了，而 `py-eureka-client` 当前还是支持 `python2` 的，因此，`dnspython` 并没有引入到项目工程当中。所有，如果你使用到这项特性，请手动安装 `dnspython` 依赖库。*
+
+*Python 3:*
+
+```shell
+python3 -m pip install dnspython
+```
+
+*python2:*
+
+```shell
+python2 -m pip install dnspython==1.16.0
+```
+
+*如果你没有安装 `dnspytho`，`py-eureka-client` 会尝试 `host` 命令来解析 DNS，`host` 命令默认在许多的 Linux 发行版本中都默认有安装。但如果是在 docker 容器的一些简化系统中，你可能需要手动安装这个命令。*
+
+你可以独立配置 eureka 服务器的协议、简单认证、上下文路径，而不把这些放在 URL中。
+
+```python
+import py_eureka_client.eureka_client as eureka_client
+eureka_client.init(eureka_domain="mydomaintest.netflix.net",
+                region="us-east-1",
+                zone="us-east-1c",
+                eureka_protocol="https",
+                eureka_basic_auth_user="keijack",
+                eureka_basic_auth_password="kjauthpass",
+                eureka_context="/eureka/v2",
+                app_name="python_module_1", 
+                instance_port=9090,
+```
+
+或者
+
+```python
+import py_eureka_client.eureka_client as eureka_client
+eureka_client.init(eureka_server="your-eureka-server-peer1,your-eureka-server-peer2",
+                eureka_protocol="https",
+                eureka_basic_auth_user="keijack",
+                eureka_basic_auth_password="kjauthpass",
+                eureka_context="/eureka/v2",
+                app_name="python_module_1", 
+                instance_port=9090)
+```
+
+### 调用远程服务
+
+当初始化完 eureka client 之后，你就可以通过拉取 eureka server 的信息来调用远程服务了，代码如下：
 
 ```python
 import py_eureka_client.eureka_client as eureka_client
@@ -275,12 +370,4 @@ _handler.setLevel("INFO")
 logger.set_handler(_handler)
 ```
 
-### 退出
-
-大部分情况下，如果你正常退出 python 应用程序，`py_eureka_client` 会自己停止并且向 eureka 服务器要求删除当前的节点实例（通过 @atexit 实现），但是，有时候你可能希望自己来控制退出的时机，那么你可以通过以下代码来实现：
-
-```python
-import py_eureka_client.eureka_client as eureka_client
-
-eureka_client.stop()
-```
+**其他更多的信息请查看项目注释。**

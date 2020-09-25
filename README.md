@@ -67,7 +67,7 @@ client.stop()
 
 In fact, the `init` function is a facade of the EurekaClient, it holds a client object behind, you can get that by catching its return value or use `eureka_client.get_client()` to get it. The `init` function will automatically start and stop the client while using raw `EurekaClient`, you must call the `start()` and `stop()` method explicitly. 
 
-*In the following document, I will use the facade functions as the example, please not that you can find all the method with the same name in the `EurekaClient` class.*
+*In the following document, I will use the facade functions as the example, please note that you can find all the method with the same name in the `EurekaClient` class.*
 
 ### Registering to Eureka Server
 
@@ -124,7 +124,7 @@ eureka_client.init(eureka_domain="mydomaintest.netflix.net",
                 data_center_name="Amazon")
 ```
 
-*Please note that, eureka first try to use `dnspython` to resolve the dns domain, but because `dnspython` will not support python2 in version 2.0.0, and `py-eureka-client` still supports python2, so `dnspython` component is not include by this module. so you should install it manually.*
+*Please note that, `py-eureka-client` first try to use `dnspython` to resolve the dns domain, but because `dnspython` will not support python2 in version 2.0.0, and `py-eureka-client` still supports python2, so `dnspython` component is not include by this module. so you should install it manually.*
 
 *In python3:*
 
@@ -338,3 +338,5 @@ _handler.setLevel("INFO")
 
 logger.set_handler(_handler)
 ```
+
+**You can find more information in the project comments.**
