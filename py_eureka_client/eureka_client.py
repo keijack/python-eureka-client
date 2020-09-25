@@ -1,5 +1,27 @@
 # -*- coding: utf-8 -*-
 
+"""
+Copyright (c) 2018 Keijack Wu
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
+
 import atexit
 import json
 import os
@@ -30,7 +52,7 @@ except NameError:
     # python 3 does no longer support long method, use int instead
     long = int
 
-_logger = get_logger("EurekaClient")
+_logger = get_logger("eureka_client")
 
 """
 Status of instances
@@ -532,7 +554,7 @@ def _current_time_millis():
     return int(time.time() * 1000)
 
 
-"""====================== Registry Client ======================================="""
+"""====================== Client ======================================="""
 
 
 class EurekaServerConf(object):
@@ -627,18 +649,184 @@ class EurekaServerConf(object):
 
 
 class EurekaClient(object):
-    """Eureka client for spring cloud"""
+    """
+    Example:
+    
+    >>> client = EurekaClient(
+            eureka_server="http://my_eureka_server_peer_1/eureka/v2,http://my_eureka_server_peer_2/eureka/v2", 
+            app_name="python_module_1", 
+            instance_port=9090)
+    >>> client.start()
+    >>> result = client.do_service("APP_NAME", "/context/path", return_type="json")
+
+    EIPs support: 
+
+    You can configure EIP using `eureka_availability_zones` and specify the `zone` of your instance. But please aware, that the client won't fill up the metadata atomatically, 
+    You should put it to the `metadata` when creating the object.
+
+    >>> client = EurekaClient(eureka_availability_zones={
+                "us-east-1c": "http://ec2-552-627-568-165.compute-1.amazonaws.com:7001/eureka/v2/,http://ec2-368-101-182-134.compute-1.amazonaws.com:7001/eureka/v2/",
+                "us-east-1d": "http://ec2-552-627-568-170.compute-1.amazonaws.com:7001/eureka/v2/",
+                "us-east-1e": "http://ec2-500-179-285-592.compute-1.amazonaws.com:7001/eureka/v2/"}, 
+                zone="us-east-1c",
+                app_name="python_module_1", 
+                instance_port=9090,
+                data_center_name="Amazon")
+
+    EurekaClient supports DNS discovery feature.
+
+    For instance, following is a DNS TXT record created in the DNS server that lists the set of available DNS names for a zone.
+
+    >>> txt.us-east-1.mydomaintest.netflix.net="us-east-1c.mydomaintest.netflix.net" "us-east-1d.mydomaintest.netflix.net" "us-east-1e.mydomaintest.netflix.net"
+
+    Then, you can define TXT records recursively for each zone similar to the following (if more than one hostname per zone, space delimit)
+
+    >>> txt.us-east-1c.mydomaintest.netflix.net="ec2-552-627-568-165.compute-1.amazonaws.com" "ec2-368-101-182-134.compute-1.amazonaws.com"
+    >>> txt.us-east-1d.mydomaintest.netflix.net="ec2-552-627-568-170.compute-1.amazonaws.com"
+    >>> txt.us-east-1e.mydomaintest.netflix.net="ec2-500-179-285-592.compute-1.amazonaws.com"
+
+    And then you can create the client like: 
+
+    >>> client = EurekaClient(eureka_domain="mydomaintest.netflix.net",
+                region="us-east-1",
+                zone="us-east-1c",
+                app_name="python_module_1", 
+                instance_port=9090,
+                data_center_name="Amazon")
+
+    Eureka client also supports setting up the protocol, basic authentication and context path of your eureka server. 
+
+    >>> client = EurekaClient(eureka_domain="mydomaintest.netflix.net",
+                region="us-east-1",
+                zone="us-east-1c",
+                eureka_protocol="https",
+                eureka_basic_auth_user="keijack",
+                eureka_basic_auth_password="kjauthpass",
+                eureka_context="/eureka/v2",
+                app_name="python_module_1", 
+                instance_port=9090,
+                data_center_name="Amazon")
+
+    or
+
+    >>> client = EurekaClient(eureka_server="my_eureka_server_peer_1,my_eureka_server_peer_2",
+                eureka_protocol="https",
+                eureka_basic_auth_user="keijack",
+                eureka_basic_auth_password="kjauthpass",
+                eureka_context="/eureka/v2",
+                app_name="python_module_1", 
+                instance_port=9090)
+
+    You can use `do_service`, `do_service_async`, `wall_nodes`, `wall_nodes_async` to call the remote services.
+
+    >>> res = eureka_client.do_service("OTHER-SERVICE-NAME", "/service/context/path")
+
+    >>> def success_callabck(data):
+            ...
+
+        def error_callback(error):
+            ...
+        
+        client.do_service_async("OTHER-SERVICE-NAME", "/service/context/path", on_success=success_callabck, on_error=error_callback)
+
+    >>> def walk_using_your_own_urllib(url):
+            ...
+        
+        res = client.walk_nodes("OTHER-SERVICE-NAME", "/service/context/path", walker=walk_using_your_own_urllib)
+
+    >>> client.walk_nodes("OTHER-SERVICE-NAME", "/service/context/path",
+                          walker=walk_using_your_own_urllib,
+                          on_success=success_callabck,
+                          on_error=error_callback)
+        
+
+    Attributes:
+
+    * eureka_server: The eureka server url, if you want have deploy a cluster to do the failover, use `,` to separate the urls.
+
+    * eureka_domain: The domain name when using the DNS discovery.
+
+    * region: The region when using DNS discovery.
+
+    * zone: Which zone your instances belong to, default is `defaultZone`.
+
+    * eureka_availability_zones: The zones' url configurations.
+
+    * eureka_protocol: The protocol of the eureka server, if the url include this part, this protocol will not add to the url.
+
+    * eureka_basic_auth_user: User name of the basic authentication of the eureka server, if the url include this part, this protocol will not add to the url.
+
+    * eureka_basic_auth_password: Password of the basic authentication of the eureka server, if the url include this part, this protocol will not add to the url.
+
+    * eureka_context: The context path of the eureka server, if the url include this part, this protocol will not add to the url, default is `/eureka`
+        which meets the spring-boot eureka context but not the Netflix eureka server url.
+
+    * prefer_same_zone: When set to True, will first find the eureka server in the same zone to register, and find the instances in the same zone to do
+        the service. Or it will randomly choose the eureka server  to register and instances to do the services, default is `True`.
+
+    * should_register: When set to False, will not register this instance to the eureka server, default is `True`.
+
+    * should_discover: When set to False, will not pull registry from the eureka server, default is `True`.
+
+    The following parameters all the properties of this instances, all this fields will be sent to the eureka server.
+
+    * app_name: The application name of this instance.
+
+    * instance_id: The id of this instance, if not specified, will generate one by app_name and instance_host/instance_ip and instance_port.
+
+    * instance_host： The host of this instance. 
+
+    * instance_ip: The ip of this instance. If instatnce_host and instance_ip are not specified, will try to find the ip via connection to the eureka server.
+
+    * instance_port: The port of this instance. 
+
+    * instance_unsecure_port_enabled: Set whether enable the instance's unsecure port, default is `True`.
+
+    * instance_secure_port: The secure port of this instance. 
+
+    * instance_secure_port_enabled: Set whether enable the instance's secure port, default is `False`.
+
+    * data_center_name: Accept `Netflix`, `Amazon`, `MyOwn`, default is `MyOwn`
+
+    * renewal_interval_in_secs: Will send heartbeat and pull registry in this time interval, defalut is 30 seconds
+
+    * duration_in_secs: Sets the client specified setting for eviction (e.g. how long to wait without renewal event).
+
+    * home_page_url: The home page url of this instance.
+
+    * status_page_url: The status page url of this instance.
+
+    * health_check_url: The health check url of this instance.
+
+    * secure_health_check_url: The secure health check url of this instance.
+
+    * vip_adr: The virtual ip address of this instance.
+
+    * secure_vip_addr: The secure virtual ip address of this instance.
+
+    * is_coordinating_discovery_server: Sets a flag if this instance is the same as the discovery server that is
+        return the instances. This flag is used by the discovery clients to
+        identity the discovery server which is coordinating/returning the
+        information.
+
+    * metadata: The metadata map of this instances.
+
+    * remote_regions: Will also find the services that belongs to these regions.
+
+    * ha_strategy: Specify the strategy how to choose a instance when there are more than one instanse of an App. 
+
+    """
 
     def __init__(self,
                  eureka_server=_DEFAULT_EUREKA_SERVER_URL,
                  eureka_domain="",
+                 region="",
+                 zone="",
+                 eureka_availability_zones={},
                  eureka_protocol="http",
                  eureka_basic_auth_user="",
                  eureka_basic_auth_password="",
-                 eureka_context="eureka/v2",
-                 eureka_availability_zones={},
-                 region="",
-                 zone="",
+                 eureka_context="/eureka",
                  prefer_same_zone=True,
                  should_register=True,
                  should_discover=True,
@@ -650,7 +838,6 @@ class EurekaClient(object):
                  instance_unsecure_port_enabled=True,
                  instance_secure_port=_DEFAULT_INSTNACE_SECURE_PORT,
                  instance_secure_port_enabled=False,
-                 country_id=1,  # @deprecaded
                  data_center_name=_DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
                  renewal_interval_in_secs=_RENEWAL_INTERVAL_IN_SECS,
                  duration_in_secs=_DURATION_IN_SECS,
@@ -664,7 +851,6 @@ class EurekaClient(object):
                  metadata={},
                  remote_regions=[],
                  ha_strategy=HA_STRATEGY_RANDOM):
-
         assert app_name is not None and app_name != "" if should_register else True, "application name must be specified."
         assert instance_port > 0 if should_register else True, "port is unvalid"
         assert isinstance(metadata, dict), "metadata must be dict"
@@ -727,7 +913,7 @@ class EurekaClient(object):
                 '$': instance_secure_port,
                 '@enabled': str(instance_secure_port_enabled).lower()
             },
-            'countryId': country_id,
+            'countryId': 1,
             'dataCenterInfo': {
                 '@class': _DEFAULT_DATA_CENTER_INFO_CLASS,
                 'name': data_center_name
@@ -1217,13 +1403,13 @@ __cache_clients_lock = RLock()
 
 def init(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
          eureka_domain="",
+         region="",
+         zone="",
+         eureka_availability_zones={},
          eureka_protocol="http",
          eureka_basic_auth_user="",
          eureka_basic_auth_password="",
          eureka_context="eureka/v2",
-         eureka_availability_zones={},
-         region="",
-         zone="",
          should_register=True,
          should_discover=True,
          app_name="",
@@ -1234,7 +1420,6 @@ def init(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
          instance_unsecure_port_enabled=True,
          instance_secure_port=_DEFAULT_INSTNACE_SECURE_PORT,
          instance_secure_port_enabled=False,
-         country_id=1,  # @deprecaded
          data_center_name=_DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
          renewal_interval_in_secs=_RENEWAL_INTERVAL_IN_SECS,
          duration_in_secs=_DURATION_IN_SECS,
@@ -1246,22 +1431,30 @@ def init(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
          secure_vip_addr="",
          is_coordinating_discovery_server=False,
          metadata={},
-         regions=[],  # @deprecated
          remote_regions=[],
          ha_strategy=HA_STRATEGY_RANDOM):
+    """
+    Initialize an EurekaClient object and put it to cache, you can use a set of functions to do the service.
+
+    Unlike using EurekaClient class that you need to start and stop the client object by yourself, this method 
+    will start the client automatically after the object created and stop it when the programe exist.
+
+    read EurekaClient for more information for the parameters details.
+    """
     with __cache_clients_lock:
-        r = regions if isinstance(regions, list) else []
-        rr = remote_regions if isinstance(remote_regions, list) else []
-        rr = r + rr
+        if __cache_key in __cache_clients:
+            _logger.warn("A client is already running, try to stop it and start the new one!")
+            __cache_clients[__cache_key].stop()
+            del __cache_clients[__cache_key]
         client = EurekaClient(eureka_server=eureka_server,
                               eureka_domain=eureka_domain,
+                              region=region,
+                              zone=zone,
+                              eureka_availability_zones=eureka_availability_zones,
                               eureka_protocol=eureka_protocol,
                               eureka_basic_auth_user=eureka_basic_auth_user,
                               eureka_basic_auth_password=eureka_basic_auth_password,
                               eureka_context=eureka_context,
-                              eureka_availability_zones=eureka_availability_zones,
-                              region=region,
-                              zone=zone,
                               should_register=should_register,
                               should_discover=should_discover,
                               app_name=app_name,
@@ -1272,7 +1465,6 @@ def init(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
                               instance_unsecure_port_enabled=instance_unsecure_port_enabled,
                               instance_secure_port=instance_secure_port,
                               instance_secure_port_enabled=instance_secure_port_enabled,
-                              country_id=country_id,
                               data_center_name=data_center_name,
                               renewal_interval_in_secs=renewal_interval_in_secs,
                               duration_in_secs=duration_in_secs,
@@ -1284,7 +1476,7 @@ def init(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
                               secure_vip_addr=secure_vip_addr,
                               is_coordinating_discovery_server=is_coordinating_discovery_server,
                               metadata=metadata,
-                              remote_regions=rr,
+                              remote_regions=remote_regions,
                               ha_strategy=ha_strategy)
         __cache_clients[__cache_key] = client
         client.start()
@@ -1300,7 +1492,6 @@ def init_registry_client(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
                          instance_unsecure_port_enabled=True,
                          instance_secure_port=_DEFAULT_INSTNACE_SECURE_PORT,
                          instance_secure_port_enabled=False,
-                         country_id=1,  # @deprecaded
                          data_center_name=_DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
                          renewal_interval_in_secs=_RENEWAL_INTERVAL_IN_SECS,
                          duration_in_secs=_DURATION_IN_SECS,
@@ -1325,7 +1516,6 @@ def init_registry_client(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
                 instance_unsecure_port_enabled=instance_unsecure_port_enabled,
                 instance_secure_port=instance_secure_port,
                 instance_secure_port_enabled=instance_secure_port_enabled,
-                country_id=country_id,
                 data_center_name=data_center_name,
                 renewal_interval_in_secs=renewal_interval_in_secs,
                 duration_in_secs=duration_in_secs,

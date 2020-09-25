@@ -14,6 +14,7 @@ Python 2.7 / 3.6+ (It should also work at 3.5, not test)
 
 * Register your python components to eureka server.
 * Support failover.
+* Support DNS discovery. 
 * Send heartbeat to eureka server.
 * Auto unregister from eureka server when your server down.
 * Discovery apps from eureka server.
@@ -52,39 +53,124 @@ print("result of other service" + res)
 
 ```
 
-*More information about discovery client, please read `Use Discovery Client` Chapter*
+You can also use the `EurekaClient` class. 
 
-### Use Registry Client Only
+```python
+from py_eureka_client.eureka_client import EurekaClient
+client = EurekaClient(eureka_server="http://my_eureka_server_peer_1/eureka/v2,http://my_eureka_server_peer_2/eureka/v2", app_name="python_module_1", instance_port=9090)
+client.start()
+res = client.do_service("OTHER-SERVICE-NAME", "/service/context/path")
+print("result of other service" + res)
+# when server is shutted down:
+client.stop()
+```
 
-If your server only provide service, and does not need other components' service, you can only register your client to Eureka server and ignore the discovery client. Code is below:
+In fact, the `init` function is a facade of the EurekaClient, it holds a client object behind, you can get that by catching its return value or use `eureka_client.get_client()` to get it. The `init` function will automatically start and stop the client while using raw `EurekaClient`, you must call the `start()` and `stop()` method explicitly. 
+
+*In the following document, I will use the facade functions as the example, please not that you can find all the method with the same name in the `EurekaClient` class.*
+
+### Registering to Eureka Server
+
+The most common method to will be like:
 
 ```Python
 import py_eureka_client.eureka_client as eureka_client
 
 your_rest_server_port = 9090
-# The flowing code will register your server to eureka server and also start to send heartbeat every 30 seconds
-eureka_client.init_registry_client(eureka_server="http://your-eureka-server-peer1,http://your-eureka-server-peer2",
-                                app_name="your_app_name",
+eureka_client.init(eureka_server="http://your-eureka-server-peer1,http://your-eureka-server-peer2",
+                                app_name="python_module_1",
                                 instance_port=your_rest_server_port)
 ```
 
-*If you do not specify your host and ip just like the example above, the client will choose one that could connect to eureka server.*
-
-### Use Discovery Service
-
-If your service does not provide services but want to use other components' service, you can only use this discovery client.
-
-First, init the discovery client after your server starts up.
+But if you have deploy your eureka server in several zones, you should specify the `eureka_availability_zones` parameter.
 
 ```python
 import py_eureka_client.eureka_client as eureka_client
-
-eureka_client.init_discovery_client("http://192.168.3.116:8761/eureka/, http://192.168.3.116:8762/eureka/")
+eureka_client.init(eureka_availability_zones={
+                "us-east-1c": "http://ec2-552-627-568-165.compute-1.amazonaws.com:7001/eureka/v2/,http://ec2-368-101-182-134.compute-1.amazonaws.com:7001/eureka/v2/",
+                "us-east-1d": "http://ec2-552-627-568-170.compute-1.amazonaws.com:7001/eureka/v2/",
+                "us-east-1e": "http://ec2-500-179-285-592.compute-1.amazonaws.com:7001/eureka/v2/"}, 
+                zone="us-east-1c",
+                app_name="python_module_1", 
+                instance_port=9090,
+                data_center_name="Amazon")
 ```
 
-No mather you use `init` or `init_discovery_client`, then you can now use the following methods to use other components' service:
+If you are looking for flexibility, you should configure Eureka service URLs using DNS.
 
-This is the most simplist way to do service:
+For instance, following is a DNS TXT record created in the DNS server that lists the set of available DNS names for a zone.
+
+```
+txt.us-east-1.mydomaintest.netflix.net="us-east-1c.mydomaintest.netflix.net" "us-east-1d.mydomaintest.netflix.net" "us-east-1e.mydomaintest.netflix.net"
+```
+
+Then, you can define TXT records recursively for each zone similar to the following (if more than one hostname per zone, space delimit)
+
+```
+txt.us-east-1c.mydomaintest.netflix.net="ec2-552-627-568-165.compute-1.amazonaws.com" "ec2-368-101-182-134.compute-1.amazonaws.com"
+txt.us-east-1d.mydomaintest.netflix.net="ec2-552-627-568-170.compute-1.amazonaws.com"
+txt.us-east-1e.mydomaintest.netflix.net="ec2-500-179-285-592.compute-1.amazonaws.com"
+```
+
+And then you can create the client like: 
+
+```python
+import py_eureka_client.eureka_client as eureka_client
+eureka_client.init(eureka_domain="mydomaintest.netflix.net",
+                region="us-east-1",
+                zone="us-east-1c",
+                app_name="python_module_1", 
+                instance_port=9090,
+                data_center_name="Amazon")
+```
+
+*Please note that, eureka first try to use `dnspython` to resolve the dns domain, but because `dnspython` will not support python2 in version 2.0.0, and `py-eureka-client` still supports python2, so `dnspython` component is not include by this module. so you should install it manually.*
+
+*In python3:*
+
+```shell
+python3 -m pip install dnspython
+```
+
+*In python2:*
+
+```shell
+python2 -m pip install dnspython==1.16.0
+```
+
+*If you have no `dnspython` installed, `py-eureka-client` will try to use `host` command which is installed defaultly in many Linux distributes to do the dns resolving.*
+
+You can specify the protocol, basic authentication and context path of your eureka server separatly rather than setting it at the URL. 
+
+```python
+import py_eureka_client.eureka_client as eureka_client
+eureka_client.init(eureka_domain="mydomaintest.netflix.net",
+                region="us-east-1",
+                zone="us-east-1c",
+                eureka_protocol="https",
+                eureka_basic_auth_user="keijack",
+                eureka_basic_auth_password="kjauthpass",
+                eureka_context="/eureka/v2",
+                app_name="python_module_1", 
+                instance_port=9090,
+```
+
+or
+
+```python
+import py_eureka_client.eureka_client as eureka_client
+eureka_client.init(eureka_server="your-eureka-server-peer1,your-eureka-server-peer2",
+                eureka_protocol="https",
+                eureka_basic_auth_user="keijack",
+                eureka_basic_auth_password="kjauthpass",
+                eureka_context="/eureka/v2",
+                app_name="python_module_1", 
+                instance_port=9090)
+```
+
+### Call Remote Service
+
+After `init` the eureka client, this is the most simplist way to do service:
 
 ```python
 import py_eureka_client.eureka_client as eureka_client
@@ -251,14 +337,4 @@ _handler.setFormatter(_formatter)
 _handler.setLevel("INFO")
 
 logger.set_handler(_handler)
-```
-
-### Stop Client
-
-This module will stop and unregister from eureka server automatically when your program exit normally. (use `@atexit`), however, if you want to stop it by yourself, please use the following code:
-
-```python
-import py_eureka_client.eureka_client as eureka_client
-
-eureka_client.stop()
 ```
