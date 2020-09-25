@@ -74,7 +74,7 @@ def get_logger(tag="py-eureka-client"):
 
 
 def _get_real_logger(tag=""):
-    # type (str, str) -> logging.Logger
+    # type (str) -> logging.Logger
     if tag in __loggers:
         return __loggers[tag]
 

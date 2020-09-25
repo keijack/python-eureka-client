@@ -131,19 +131,21 @@ class Application:
                  name="",
                  instances=None):
         self.name = name
-        self.__instances = instances if instances is not None else []
+        if isinstance(instances, list):
+            for ins in instances:
+                self.add_instance(ins)
         self.__instances_dict = {}
         self.__inst_lock = RLock()
 
     @property
     def instances(self):
         with self.__inst_lock:
-            return self.__instances
+            return list(self.__instances_dict.values())
 
     @property
     def up_instances(self):
         with self.__inst_lock:
-            return [item for item in self.__instances if item.status == INSTANCE_STATUS_UP]
+            return [item for item in self.__instances_dict.values() if item.status == INSTANCE_STATUS_UP]
 
     def get_instance(self, instance_id):
         with self.__inst_lock:
@@ -154,33 +156,27 @@ class Application:
 
     def add_instance(self, instance):
         with self.__inst_lock:
-            self.__instances.append(instance)
             self.__instances_dict[instance.instanceId] = instance
 
     def update_instance(self, instance):
         with self.__inst_lock:
             _logger.debug("update instance %s" % instance.instanceId)
-            updated = False
-            for idx in range(len(self.__instances)):
-                ele = self.__instances[idx]
-                if ele.instanceId == instance.instanceId:
-                    _logger.debug("updating index %d" % idx)
-                    self.__instances[idx] = instance
-                    updated = True
-                    break
-
-            if not updated:
-                self.add_instance(instance)
+            self.__instances_dict[instance.instanceId] = instance
 
     def remove_instance(self, instance):
         with self.__inst_lock:
-            for idx in range(len(self.__instances)):
-                ele = self.__instances[idx]
-                if ele.instanceId == instance.instanceId:
-                    del self.__instances[idx]
-                    break
             if instance.instanceId in self.__instances_dict:
                 del self.__instances_dict[instance.instanceId]
+
+    def up_instances_in_zone(self, zone):
+        with self.__inst_lock:
+            _zone = zone if zone else "defaultZone"
+            return [item for item in self.__instances_dict.values() if item.status == INSTANCE_STATUS_UP and item.zone == _zone]
+
+    def up_instances_not_in_zone(self, zone):
+        with self.__inst_lock:
+            _zone = zone if zone else "defaultZone"
+            return [item for item in self.__instances_dict.values() if item.status == INSTANCE_STATUS_UP and item.zone != _zone]
 
 
 class LeaseInfo:
@@ -217,7 +213,7 @@ class PortWrapper:
         self.enabled = enabled
 
 
-class Instance:
+class Instance(object):
 
     def __init__(self,
                  instanceId="",
@@ -270,6 +266,13 @@ class Instance:
         self.lastDirtyTimestamp = lastDirtyTimestamp
         self.actionType = actionType
         self.asgName = asgName
+
+    @property
+    def zone(self):
+        if self.metadata and "zone" in self.metadata and self.metadata["zone"]:
+            return self.metadata["zone"]
+        else:
+            return "defaultZone"
 
 
 ########################## Basic functions #################################
@@ -535,7 +538,7 @@ def _current_time_millis():
 class EurekaServerConf(object):
 
     def __init__(self,
-                 eureka_servers=_DEFAULT_EUREKA_SERVER_URL,
+                 eureka_server=_DEFAULT_EUREKA_SERVER_URL,
                  eureka_domain="",
                  eureka_protocol="http",
                  eureka_basic_auth_user="",
@@ -546,7 +549,7 @@ class EurekaServerConf(object):
                  zone=""):
         self.__servers = {}
         self.region = region
-        self.zone = zone
+        self.zone = _zone = zone if zone else "defaultZone"
         if eureka_domain:
             zone_urls = get_txt_dns_record("txt.%s.%s" % (region, eureka_domain))
             for zone_url in zone_urls:
@@ -563,11 +566,11 @@ class EurekaServerConf(object):
                 self.__servers[zone_name] = [self._format_url(eureka_url.strip(), eureka_protocol, eureka_basic_auth_user,
                                                               eureka_basic_auth_password, eureka_context) for eureka_url in eureka_urls]
         else:
-            self.__servers[zone if zone else "defaultZone"] = [self._format_url(eureka_url.strip(), eureka_protocol, eureka_basic_auth_user,
-                                                                                eureka_basic_auth_password, eureka_context) for eureka_url in eureka_servers.split(",")]
+            self.__servers[_zone] = [self._format_url(eureka_url.strip(), eureka_protocol, eureka_basic_auth_user,
+                                                      eureka_basic_auth_password, eureka_context) for eureka_url in eureka_server.split(",")]
         self.__servers_not_in_zone = copy(self.__servers)
-        if zone in self.__servers_not_in_zone:
-            del self.__servers_not_in_zone[zone]
+        if _zone in self.__servers_not_in_zone:
+            del self.__servers_not_in_zone[_zone]
 
     def _format_url(self, server_url="", eureka_protocol="http",
                     eureka_basic_auth_user="",
@@ -622,19 +625,21 @@ class EurekaServerConf(object):
     def servers_not_in_zone(self):
         return self.__servers_not_in_zone
 
-    def servers_ont_in_zones(self, zones=[]):
-        svs = copy(self.servers)
-        for zone in zones:
-            if zone in svs:
-                del svs[zone]
-        return svs
 
-
-class EurekaClient:
+class EurekaClient(object):
     """Eureka client for spring cloud"""
 
     def __init__(self,
                  eureka_server=_DEFAULT_EUREKA_SERVER_URL,
+                 eureka_domain="",
+                 eureka_protocol="http",
+                 eureka_basic_auth_user="",
+                 eureka_basic_auth_password="",
+                 eureka_context="eureka/v2",
+                 eureka_availability_zones={},
+                 region="",
+                 zone="",
+                 prefer_same_zone=True,
                  should_register=True,
                  should_discover=True,
                  app_name="",
@@ -645,7 +650,7 @@ class EurekaClient:
                  instance_unsecure_port_enabled=True,
                  instance_secure_port=_DEFAULT_INSTNACE_SECURE_PORT,
                  instance_secure_port_enabled=False,
-                 countryId=1,  # @deprecaded
+                 country_id=1,  # @deprecaded
                  data_center_name=_DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
                  renewal_interval_in_secs=_RENEWAL_INTERVAL_IN_SECS,
                  duration_in_secs=_DURATION_IN_SECS,
@@ -659,7 +664,7 @@ class EurekaClient:
                  metadata={},
                  remote_regions=[],
                  ha_strategy=HA_STRATEGY_RANDOM):
-        assert eureka_server is not None and eureka_server != "", "eureka server must be specified."
+
         assert app_name is not None and app_name != "" if should_register else True, "application name must be specified."
         assert instance_port > 0 if should_register else True, "port is unvalid"
         assert isinstance(metadata, dict), "metadata must be dict"
@@ -667,9 +672,21 @@ class EurekaClient:
                                HA_STRATEGY_OTHER] if should_discover else True, "do not support strategy %d " % ha_strategy
 
         self.__net_lock = RLock()
-        self.__eureka_servers = eureka_server.split(",")
+        self.__eureka_server_conf = EurekaServerConf(
+            eureka_server=eureka_server,
+            eureka_domain=eureka_domain,
+            eureka_protocol=eureka_protocol,
+            eureka_basic_auth_user=eureka_basic_auth_user,
+            eureka_basic_auth_password=eureka_basic_auth_password,
+            eureka_context=eureka_context,
+            eureka_availability_zones=eureka_availability_zones,
+            region=region,
+            zone=zone
+        )
+        self.__cache_eureka_url = {}
         self.__should_register = should_register
         self.__should_discover = should_discover
+        self.__prefer_same_zone = prefer_same_zone
         self.__alive = False
         self.__heartbeat_timer = Timer(renewal_interval_in_secs, self.__heartbeat)
         self.__heartbeat_timer.daemon = True
@@ -689,11 +706,13 @@ class EurekaClient:
 
         # For Registery
         if should_register:
-            self.__try_all_eureka_server(try_to_get_client_ip)
+            self.__connect_to_eureka_server(try_to_get_client_ip)
 
         mdata = {
             'management.port': str(instance_port)
         }
+        if zone and zone != "defaultZone":
+            mdata["zone"] = zone
         mdata.update(metadata)
         self.__instance = {
             'instanceId': instance_id if instance_id != "" else "%s:%s:%d" % (self.__instance_host, app_name.lower(), instance_port),
@@ -708,7 +727,7 @@ class EurekaClient:
                 '$': instance_secure_port,
                 '@enabled': str(instance_secure_port_enabled).lower()
             },
-            'countryId': countryId,
+            'countryId': country_id,
             'dataCenterInfo': {
                 '@class': _DEFAULT_DATA_CENTER_INFO_CLASS,
                 'name': data_center_name
@@ -732,7 +751,6 @@ class EurekaClient:
         }
 
         # For discovery
-        self.__eureka_servers = eureka_server.split(",")
         self.__remote_regions = remote_regions if remote_regions is not None else []
         self.__applications = None
         self.__delta = None
@@ -750,20 +768,62 @@ class EurekaClient:
         return self.__should_discover
 
     @property
+    def zone(self):
+        return self.__eureka_server_conf.zone
+
+    @property
     def applications(self):
         with self.__application_mth_lock:
             if self.__applications is None:
                 self.__pull_full_registry()
             return self.__applications
 
-    def __try_all_eureka_server(self, fun):
+    def __try_eureka_server_in_cache(self, fun):
+        for z, url in self.__cache_eureka_url.items():
+            _logger.debug("try to do %s in zone[%s] using cached url %s. " % (fun.__name__, z, url))
+            fun(url)
+
+    def __try_eureka_server_in_zone(self, fun):
+        self.__try_eureka_servers_in_list(fun, self.__eureka_server_conf.servers_in_zone, self.zone)
+
+    def __try_eureka_server_not_in_zone(self, fun):
+        for zone, urls in self.__eureka_server_conf.servers_not_in_zone.items():
+            try:
+                self.__try_eureka_servers_in_list(fun, urls, zone)
+            except (http_client.HTTPError, http_client.URLError):
+                _logger.exception("error!")
+            else:
+                return
+        raise http_client.URLError("All eureka servers in all zone are down!")
+
+    def __try_eureka_server_regardless_zones(self, fun):
+        for zone, urls in self.__eureka_server_conf.servers.items():
+            try:
+                self.__try_eureka_servers_in_list(fun, urls, zone)
+            except (http_client.HTTPError, http_client.URLError):
+                _logger.exception("error!")
+            else:
+                return
+        raise http_client.URLError("All eureka servers in all zone are down!")
+
+    def __try_all_eureka_servers(self, fun):
+        if self.__prefer_same_zone:
+            try:
+                self.__try_eureka_server_in_zone(fun)
+            except (http_client.HTTPError, http_client.URLError):
+                self.__try_eureka_server_not_in_zone(fun)
+        else:
+            self.__try_eureka_server_regardless_zones(fun)
+
+    def __try_eureka_servers_in_list(self, fun, eureka_servers=[], zone="defaultZone"):
         with self.__net_lock:
-            untry_servers = self.__eureka_servers
+            untry_servers = eureka_servers
             tried_servers = []
             ok = False
             while len(untry_servers) > 0:
                 url = untry_servers[0].strip()
                 try:
+                    _logger.debug("try to do %s in zone[%s] using url %s. " % (fun.__name__, zone, url))
                     fun(url)
                 except (http_client.HTTPError, http_client.URLError):
                     _logger.warn("Eureka server [%s] is down, use next url to try." % url)
@@ -771,12 +831,22 @@ class EurekaClient:
                     untry_servers = untry_servers[1:]
                 else:
                     ok = True
+                    self.__cache_eureka_url[zone if zone else "defaultZone"] = url
                     break
             if len(tried_servers) > 0:
                 untry_servers.extend(tried_servers)
                 self.__eureka_servers = untry_servers
             if not ok:
-                raise http_client.URLError("All eureka servers are down!")
+                raise http_client.URLError("All eureka servers in zone[%s] are down!" % zone)
+
+    def __connect_to_eureka_server(self, fun):
+        if self.__cache_eureka_url:
+            try:
+                self.__try_eureka_server_in_cache(fun)
+            except (http_client.HTTPError, http_client.URLError):
+                self.__try_all_eureka_servers(fun)
+        else:
+            self.__try_all_eureka_servers(fun)
 
     @staticmethod
     def __format_url(url, host, port, defalut_ctx=""):
@@ -824,7 +894,7 @@ class EurekaClient:
         self.__instance["lastUpdatedTimestamp"] = str(_current_time_millis())
         self.__instance["lastDirtyTimestamp"] = str(_current_time_millis())
         try:
-            self.__try_all_eureka_server(lambda url: _register(url, self.__instance))
+            self.__connect_to_eureka_server(lambda url: _register(url, self.__instance))
         except:
             self.__alive = False
             _logger.exception("register error!")
@@ -834,7 +904,7 @@ class EurekaClient:
 
     def cancel(self):
         try:
-            self.__try_all_eureka_server(lambda url: cancel(url, self.__instance["app"], self.__instance["instanceId"]))
+            self.__connect_to_eureka_server(lambda url: cancel(url, self.__instance["app"], self.__instance["instanceId"]))
         except:
             _logger.exception("error!")
         else:
@@ -845,9 +915,9 @@ class EurekaClient:
             self.register()
             return
         try:
-            self.__try_all_eureka_server(lambda url: status_update(url, self.__instance["app"],
-                                                                   self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"],
-                                                                   status=self.__instance["status"], overriddenstatus=overridden_status))
+            self.__connect_to_eureka_server(lambda url: status_update(url, self.__instance["app"],
+                                                                      self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"],
+                                                                      status=self.__instance["status"], overriddenstatus=overridden_status))
         except:
             _logger.exception("Error!")
             _logger.info("Cannot send heartbeat to server, try to register")
@@ -856,13 +926,13 @@ class EurekaClient:
     def status_update(self, new_status):
         self.__instance["status"] = new_status
         try:
-            self.__try_all_eureka_server(lambda url: status_update(url, self.__instance["app"], self.__instance["instanceId"],
-                                                                   self.__instance["lastDirtyTimestamp"], new_status))
+            self.__connect_to_eureka_server(lambda url: status_update(url, self.__instance["app"], self.__instance["instanceId"],
+                                                                      self.__instance["lastDirtyTimestamp"], new_status))
         except:
             _logger.exception("error!")
 
     def delete_status_override(self):
-        self.__try_all_eureka_server(lambda url: delete_status_override(
+        self.__connect_to_eureka_server(lambda url: delete_status_override(
             url, self.__instance["app"], self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"]))
 
     def __start_registery(self):
@@ -889,7 +959,7 @@ class EurekaClient:
             self.__applications = get_applications(url, self.__remote_regions)
             self.__delta = self.__applications
         try:
-            self.__try_all_eureka_server(do_pull)
+            self.__connect_to_eureka_server(do_pull)
         except:
             _logger.exception("pull full registry from eureka server error!")
 
@@ -909,10 +979,9 @@ class EurekaClient:
             if not self.__is_hash_match():
                 self.__pull_full_registry()
         try:
-            self.__try_all_eureka_server(do_fetch)
+            self.__connect_to_eureka_server(do_fetch)
         except:
             _logger.exception("fetch delta from eureka server error!")
-
 
     def __is_hash_match(self):
         app_hash = self.__get_applications_hash()
@@ -1134,6 +1203,14 @@ __cache_clients_lock = RLock()
 
 
 def init(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
+         eureka_domain="",
+         eureka_protocol="http",
+         eureka_basic_auth_user="",
+         eureka_basic_auth_password="",
+         eureka_context="eureka/v2",
+         eureka_availability_zones={},
+         region="",
+         zone="",
          should_register=True,
          should_discover=True,
          app_name="",
@@ -1144,7 +1221,7 @@ def init(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
          instance_unsecure_port_enabled=True,
          instance_secure_port=_DEFAULT_INSTNACE_SECURE_PORT,
          instance_secure_port_enabled=False,
-         countryId=1,  # @deprecaded
+         country_id=1,  # @deprecaded
          data_center_name=_DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
          renewal_interval_in_secs=_RENEWAL_INTERVAL_IN_SECS,
          duration_in_secs=_DURATION_IN_SECS,
@@ -1164,6 +1241,14 @@ def init(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
         rr = remote_regions if isinstance(remote_regions, list) else []
         rr = r + rr
         client = EurekaClient(eureka_server=eureka_server,
+                              eureka_domain=eureka_domain,
+                              eureka_protocol=eureka_protocol,
+                              eureka_basic_auth_user=eureka_basic_auth_user,
+                              eureka_basic_auth_password=eureka_basic_auth_password,
+                              eureka_context=eureka_context,
+                              eureka_availability_zones=eureka_availability_zones,
+                              region=region,
+                              zone=zone,
                               should_register=should_register,
                               should_discover=should_discover,
                               app_name=app_name,
@@ -1174,7 +1259,7 @@ def init(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
                               instance_unsecure_port_enabled=instance_unsecure_port_enabled,
                               instance_secure_port=instance_secure_port,
                               instance_secure_port_enabled=instance_secure_port_enabled,
-                              countryId=countryId,
+                              country_id=country_id,
                               data_center_name=data_center_name,
                               renewal_interval_in_secs=renewal_interval_in_secs,
                               duration_in_secs=duration_in_secs,
@@ -1202,7 +1287,7 @@ def init_registry_client(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
                          instance_unsecure_port_enabled=True,
                          instance_secure_port=_DEFAULT_INSTNACE_SECURE_PORT,
                          instance_secure_port_enabled=False,
-                         countryId=1,  # @deprecaded
+                         country_id=1,  # @deprecaded
                          data_center_name=_DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
                          renewal_interval_in_secs=_RENEWAL_INTERVAL_IN_SECS,
                          duration_in_secs=_DURATION_IN_SECS,
@@ -1227,7 +1312,7 @@ def init_registry_client(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
                 instance_unsecure_port_enabled=instance_unsecure_port_enabled,
                 instance_secure_port=instance_secure_port,
                 instance_secure_port_enabled=instance_secure_port_enabled,
-                countryId=countryId,
+                country_id=country_id,
                 data_center_name=data_center_name,
                 renewal_interval_in_secs=renewal_interval_in_secs,
                 duration_in_secs=duration_in_secs,
