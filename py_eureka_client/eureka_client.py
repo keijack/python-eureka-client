@@ -817,27 +817,24 @@ class EurekaClient(object):
 
     def __try_eureka_servers_in_list(self, fun, eureka_servers=[], zone="defaultZone"):
         with self.__net_lock:
-            untry_servers = eureka_servers
-            tried_servers = []
             ok = False
-            while len(untry_servers) > 0:
-                url = untry_servers[0].strip()
+            _zone = zone if zone else "defaultZone"
+            for url in eureka_servers:
+                url = url.strip()
                 try:
-                    _logger.debug("try to do %s in zone[%s] using url %s. " % (fun.__name__, zone, url))
+                    _logger.debug("try to do %s in zone[%s] using url %s. " % (fun.__name__, _zone, url))
                     fun(url)
                 except (http_client.HTTPError, http_client.URLError):
                     _logger.warn("Eureka server [%s] is down, use next url to try." % url)
-                    tried_servers.append(url)
-                    untry_servers = untry_servers[1:]
                 else:
                     ok = True
-                    self.__cache_eureka_url[zone if zone else "defaultZone"] = url
+                    self.__cache_eureka_url[_zone] = url
                     break
-            if len(tried_servers) > 0:
-                untry_servers.extend(tried_servers)
-                self.__eureka_servers = untry_servers
+
             if not ok:
-                raise http_client.URLError("All eureka servers in zone[%s] are down!" % zone)
+                if _zone in self.__cache_eureka_url:
+                    del self.__cache_eureka_url[_zone]
+                raise http_client.URLError("All eureka servers in zone[%s] are down!" % _zone)
 
     def __connect_to_eureka_server(self, fun):
         if self.__cache_eureka_url:
@@ -1047,7 +1044,7 @@ class EurekaClient(object):
                     url = url + service[1:]
                 else:
                     url = url + service
-                _logger.debug("service url::" + url)
+                _logger.debug("do service with url::" + url)
                 return walker(url)
             except (http_client.HTTPError, http_client.URLError):
                 _logger.warn("do service %s in node [%s] error, use next node." % (service, node.instanceId))
@@ -1104,11 +1101,27 @@ class EurekaClient(object):
         app = self.applications.get_application(application_name)
         if app is None:
             return None
+        app_ups = []
+        if self.__prefer_same_zone:
+            ups_same_zone = app.up_instances_in_zone(self.zone)
+            if ups_same_zone:
+                _logger.debug("app[%s]'s up instances in the same zone are: %s" % (application_name, str([ins.instanceId for ins in ups_same_zone])))
+                app_ups.extend(ups_same_zone)
+            ups_not_same_zones = app.up_instances_not_in_zone(self.zone)
+            if ups_not_same_zones:
+                _logger.debug("app[%s]'s up instances not in the same zone are: %s" % (application_name, str([ins.instanceId for ins in ups_not_same_zones])))
+                app_ups.extend(ups_not_same_zones)
+        else:
+            ups = app.up_instances
+            if ups:
+                _logger.debug("app[%s]'s all up instances are: %s" % (application_name, str([ins.instanceId for ins in ups])))
+                app_ups = app_ups.extend()
+        
         up_instances = []
         if ignore_instance_ids is None or len(ignore_instance_ids) == 0:
-            up_instances.extend(app.up_instances)
+            up_instances.extend(app_ups)
         else:
-            for ins in app.up_instances:
+            for ins in app_ups:
                 if ins.instanceId not in ignore_instance_ids:
                     up_instances.append(ins)
 
