@@ -339,4 +339,18 @@ _handler.setLevel("INFO")
 logger.set_handler(_handler)
 ```
 
+If you want to add a handler rather than replace the inner one, you can use:
+
+```python
+logger.add_handler(_handler)
+```
+
+If you want to change the logger level:
+
+```python
+logger.set_level("DEBUG")
+```
+
+This logger will first save all the log record to a global queue, and then output them in a background thread, so it is very suitable for getting several logger with a same handler, especialy the `TimedRotatingFileHandler` which may slice the log files not quite well in a mutiple thread environment. 
+
 **You can find more information in the project comments.**

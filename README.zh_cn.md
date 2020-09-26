@@ -370,4 +370,19 @@ _handler.setLevel("INFO")
 logger.set_handler(_handler)
 ```
 
+如果你想增加一个日志控制器而不是想替代内置的，那么你可以使用以下方法：
+
+```python
+logger.add_handler(_handler)
+```
+
+你也可以使用以下方法来设置日志输出级别：
+
+```python
+logger.set_level("DEBUG")
+```
+
+这个日志使用了一个背景线程来输出日志，因此其非常适合使用在多线程的场景，特别你是你有多个 logger 共用一个 `TimedRotatingFileHandler` 的时候。在多线程的场景下，这个日志控制器经常不能正常地按时切割文件。
+
+
 **其他更多的信息请查看项目注释。**
