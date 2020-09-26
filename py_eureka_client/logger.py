@@ -40,6 +40,9 @@ _handler = logging.StreamHandler(sys.stdout)
 _handler.setFormatter(__formatter_)
 _handler.setLevel(_LOG_LEVEL_)
 
+_handlers = []
+_handlers.append(_handler)
+
 _msg_cache = queue.Queue(10000)
 
 
@@ -64,25 +67,46 @@ def set_level(level):
             l.setLevel(lv)
 
 
+def add_handler(handler):
+    _handlers.append(handler)
+    for l in __cache_loggers.values():
+        l.addHandler(handler)
+
+
+def remove_handler(handler):
+    if handler in _handlers:
+        _handlers.remove(handler)
+    for l in __cache_loggers.values():
+        l.removeHandler(handler)
+
+
 def set_handler(handler):
-    global _handler
-    _handler = handler
+    _handlers.clear()
+    _handlers.append(handler)
+    for l in __cache_loggers.values():
+        for hdlr in l.handlers:
+            l.removeHandler(hdlr)
+        l.addHandler(handler)
 
 
 def get_logger(tag="py-eureka-client"):
     if tag not in __cache_loggers:
         __cache_loggers[tag] = CachingLogger(tag, _LOG_LEVEL_)
-        __cache_loggers[tag].addHandler(_handler)
+        for hdlr in _handlers:
+            __cache_loggers[tag].addHandler(hdlr)
     return __cache_loggers[tag]
+
 
 def _log_msg_from_queue():
     while True:
         msg = _msg_cache.get()
         msg[0]._call_handlers(msg[1])
 
+
 def _log_msg_in_backgrond():
     log_thread = Thread(target=_log_msg_from_queue, name="logging-thread")
     log_thread.daemon = True
     log_thread.start()
+
 
 _log_msg_in_backgrond()
