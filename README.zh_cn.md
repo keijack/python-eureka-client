@@ -194,17 +194,7 @@ eureka_client.init(eureka_server="your-eureka-server-peer1,your-eureka-server-pe
 
 ### 调用远程服务
 
-当初始化完 eureka client 之后，你就可以通过拉取 eureka server 的信息来调用远程服务了，代码如下：
-
-```python
-import py_eureka_client.eureka_client as eureka_client
-
-eureka_server_list = "http://your-eureka-server-peer1,http://your-eureka-server-peer2"
-# you can reuse the eureka_server_list which you used in registry client
-eureka_client.init_discovery_client(eureka_server_list)
-```
-
-无论你使用`init`还是`init_discovery_client`，初始化了发现服务之后，你就能通过以下方法来调用其他组件了。
+当初始化完 eureka client 之后，你就可以通过拉取 eureka server 的信息来调用远程服务了。
 
 最简单的调用方式是：
 
