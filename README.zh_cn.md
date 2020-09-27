@@ -303,13 +303,10 @@ import py_eureka_client.eureka_client as eureka_client
 
 eureka_server_list = "http://your-eureka-server-peer1,http://your-eureka-server-peer2"
 
-# 统一注册接口
 eureka_client.init(eureka_server=eureka_server_list,
                    app_name="your_app_name",
                    instance_port=9090,
                    ha_strategy=eureka_client.HA_STRATEGY_OTHER)
-# 仅发现服务接口
-eureka_client.init_discovery_client(eureka_server_list, ha_strategy=eureka_client.HA_STRATEGY_STICK)
 ```
 
 ### 使用三方 HTTP 客户端
