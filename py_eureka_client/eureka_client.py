@@ -651,7 +651,7 @@ class EurekaServerConf(object):
 class EurekaClient(object):
     """
     Example:
-    
+
     >>> client = EurekaClient(
             eureka_server="http://my_eureka_server_peer_1/eureka/v2,http://my_eureka_server_peer_2/eureka/v2", 
             app_name="python_module_1", 
@@ -726,19 +726,19 @@ class EurekaClient(object):
 
         def error_callback(error):
             ...
-        
+
         client.do_service_async("OTHER-SERVICE-NAME", "/service/context/path", on_success=success_callabck, on_error=error_callback)
 
     >>> def walk_using_your_own_urllib(url):
             ...
-        
+
         res = client.walk_nodes("OTHER-SERVICE-NAME", "/service/context/path", walker=walk_using_your_own_urllib)
 
     >>> client.walk_nodes("OTHER-SERVICE-NAME", "/service/context/path",
                           walker=walk_using_your_own_urllib,
                           on_success=success_callabck,
                           on_error=error_callback)
-        
+
 
     Attributes:
 
@@ -1283,33 +1283,25 @@ class EurekaClient(object):
                 return res_txt
         return self.walk_nodes(app_name, service, prefer_ip, prefer_https, walk_using_urllib)
 
+    def __get_service_not_in_ignore_list(self, instances, ignores):
+        ign = ignores if ignores else []
+        return [item for item in instances if item.instanceId not in ign]
+
     def __get_available_service(self, application_name, ignore_instance_ids=None):
         app = self.applications.get_application(application_name)
         if app is None:
             return None
-        app_ups = []
+        up_instances = []
         if self.__prefer_same_zone:
             ups_same_zone = app.up_instances_in_zone(self.zone)
-            if ups_same_zone:
-                _logger.debug("app[%s]'s up instances in the same zone are: %s" % (application_name, str([ins.instanceId for ins in ups_same_zone])))
-                app_ups.extend(ups_same_zone)
-            ups_not_same_zones = app.up_instances_not_in_zone(self.zone)
-            if ups_not_same_zones:
-                _logger.debug("app[%s]'s up instances not in the same zone are: %s" % (application_name, str([ins.instanceId for ins in ups_not_same_zones])))
-                app_ups.extend(ups_not_same_zones)
+            up_instances = self.__get_service_not_in_ignore_list(ups_same_zone, ignore_instance_ids)
+            if not up_instances:
+                ups_not_same_zone = app.up_instances_not_in_zone(self.zone)
+                _logger.debug("app[%s]'s up instances not in same zone are all down, using the one that's not in the same zone: %s" %
+                              (application_name, str([ins.instanceId for ins in ups_not_same_zone])))
+                up_instances = self.__get_service_not_in_ignore_list(ups_not_same_zone, ignore_instance_ids)
         else:
-            ups = app.up_instances
-            if ups:
-                _logger.debug("app[%s]'s all up instances are: %s" % (application_name, str([ins.instanceId for ins in ups])))
-                app_ups = app_ups.extend(ups)
-        
-        up_instances = []
-        if ignore_instance_ids is None or len(ignore_instance_ids) == 0:
-            up_instances.extend(app_ups)
-        else:
-            for ins in app_ups:
-                if ins.instanceId not in ignore_instance_ids:
-                    up_instances.append(ins)
+            up_instances = self.__get_service_not_in_ignore_list(app.up_instances, ignore_instance_ids)
 
         if len(up_instances) == 0:
             # no up instances
