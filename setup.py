@@ -9,7 +9,7 @@ setuptools.setup(
     version="0.8.2",
     author="Keijack",
     author_email="keijack.wu@gmail.com",
-    description="**Discover** other service in eureka server as well as register your python component to be made use by other services.",
+    description="A eureka client written in python. Support registering your python component to Eureka Server, as well as calling remote services by pulling the the Eureka registry. ",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/keijack/python-eureka-client",
