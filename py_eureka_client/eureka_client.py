@@ -43,6 +43,7 @@ except ImportError:
 
 from py_eureka_client.logger import get_logger
 from py_eureka_client.__dns_txt_resolver import get_txt_dns_record
+from py_eureka_client.__aws_ec2_metadata_loader import get_ec2_metadata
 import py_eureka_client.http_client as http_client
 
 
@@ -101,6 +102,7 @@ _RENEWAL_INTERVAL_IN_SECS = 30
 _DURATION_IN_SECS = 90
 _DEFAULT_DATA_CENTER_INFO = "MyOwn"
 _DEFAULT_DATA_CENTER_INFO_CLASS = "com.netflix.appinfo.InstanceInfo$DefaultDataCenterInfo"
+_AMAZON_DATA_CENTER_INFO_CLASS = "com.netflix.appinfo.AmazonInfo"
 """
 Default encoding
 """
@@ -139,12 +141,13 @@ class Applications:
             self.__applications.append(application)
             self.__application_name_dic[application.name] = application
 
-    def get_application(self, app_name):
+    def get_application(self, app_name=""):
         with self.__app_lock:
+            aname = app_name.upper()
             if app_name in self.__application_name_dic:
-                return self.__application_name_dic[app_name]
+                return self.__application_name_dic[aname]
             else:
-                return Application(name=app_name)
+                return Application(name=aname)
 
 
 class Application:
@@ -224,9 +227,11 @@ class DataCenterInfo:
 
     def __init__(self,
                  name=_DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
-                 className=_DEFAULT_DATA_CENTER_INFO_CLASS):
+                 className=_DEFAULT_DATA_CENTER_INFO_CLASS,
+                 metadata={}):
         self.name = name
         self.className = className
+        self.metadata = metadata if metadata else {}
 
 
 class PortWrapper:
@@ -339,6 +344,8 @@ def register(eureka_server, instance):
         'lastDirtyTimestamp': str(instance.lastDirtyTimestamp),
         'isCoordinatingDiscoveryServer': str(instance.isCoordinatingDiscoveryServer).lower()
     }
+    if instance.dataCenterInfo.metadata:
+        instance_dic["dataCenterInfo"]["metadata"] = instance.dataCenterInfo.metadata
     _register(eureka_server, instance_dic)
 
 
@@ -459,7 +466,7 @@ def _build_instance(xml_node):
         elif child_node.tag == "countryId":
             instance.countryId = int(child_node.text)
         elif child_node.tag == "dataCenterInfo":
-            instance.dataCenterInfo = DataCenterInfo(name=child_node.text, className=child_node.attrib["class"])
+            instance.dataCenterInfo = _build_data_center_info(child_node)
         elif child_node.tag == "hostName":
             instance.hostName = child_node.text
         elif child_node.tag == "status":
@@ -482,6 +489,19 @@ def _build_instance(xml_node):
             instance.asgName = child_node.text
 
     return instance
+
+
+def _build_data_center_info(xml_node):
+    class_name = xml_node.attrib["class"]
+    name = ""
+    metadata = {}
+    for child_node in xml_node:
+        if child_node.tag == "name":
+            name = child_node.text
+        elif child_node.tag == "metadata":
+            metadata = _build_metadata(child_node)
+
+    return DataCenterInfo(name=name, className=class_name, metadata=metadata)
 
 
 def _build_metadata(xml_node):
@@ -899,6 +919,8 @@ class EurekaClient(object):
         }
         if zone and zone != "defaultZone":
             mdata["zone"] = zone
+        elif data_center_name == "Amazon":
+            mdata["zone"] = get_ec2_metadata("placement/availability-zone")
         mdata.update(metadata)
         self.__instance = {
             'instanceId': instance_id if instance_id != "" else "%s:%s:%d" % (self.__instance_host, app_name.lower(), instance_port),
@@ -915,7 +937,7 @@ class EurekaClient(object):
             },
             'countryId': 1,
             'dataCenterInfo': {
-                '@class': _DEFAULT_DATA_CENTER_INFO_CLASS,
+                '@class': _AMAZON_DATA_CENTER_INFO_CLASS if data_center_name == "Amazon" else _DEFAULT_DATA_CENTER_INFO_CLASS,
                 'name': data_center_name
             },
             'leaseInfo': {
@@ -935,6 +957,8 @@ class EurekaClient(object):
             'secureVipAddress': secure_vip_addr if secure_vip_addr != "" else app_name.lower(),
             'isCoordinatingDiscoveryServer': str(is_coordinating_discovery_server).lower()
         }
+        if data_center_name == "Amazon":
+            self.__instance["dataCenterInfo"]["metadata"] = self.__load_ec2_metadata_dict()
 
         # For discovery
         self.__remote_regions = remote_regions if remote_regions is not None else []
@@ -944,6 +968,18 @@ class EurekaClient(object):
         self.__ha_cache = {}
 
         self.__application_mth_lock = RLock()
+
+    def __load_ec2_metadata_dict(self):
+        return {'ami-launch-index': get_ec2_metadata('ami-launch-index'),
+                'local-hostname': get_ec2_metadata('local-hostname'),
+                'availability-zone': get_ec2_metadata('availability-zone'),
+                'instance-id': get_ec2_metadata('instance-id'),
+                'public-ipv4': get_ec2_metadata('public-ipv4'),
+                'public-hostname': get_ec2_metadata('public-hostname'),
+                'ami-manifest-path': get_ec2_metadata('ami-manifest-path'),
+                'local-ipv4': get_ec2_metadata('local-ipv4'),
+                'ami-id': get_ec2_metadata('ami-id'),
+                'instance-type': get_ec2_metadata('instance-type')}
 
     @property
     def should_register(self):
