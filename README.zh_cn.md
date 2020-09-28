@@ -299,6 +299,22 @@ eureka_client.init(eureka_server=eureka_server_list,
                    ha_strategy=eureka_client.HA_STRATEGY_OTHER)
 ```
 
+如果上述内置的 HA 策略都不能满足你的需求，你可以将按以下的办法取得整个服务注册库来构建你自己的访问方法：
+
+```python
+import py_eureka_client.eureka_client as eureka_client
+
+client = eureka_client.get_client()
+app = client.applications.get_application("OTHER-SERVICE-NAME")
+up_instances = app.up_instances
+up_instances_same_zone = app.up_instances_in_zone(client.zone)
+up_instances_other_zone = app.up_instances_not_in_zone(client.zone)
+inst = up_instances[0]
+
+# ... 组装访问链接和进行远程调用
+
+```
+
 ### 使用三方 HTTP 客户端
 
 默认情况下，组件使用了内置的 urllib.request (python 2 中时 urllib2 ) 来进行 HTTP 请求。你可以使用别的 HTTP 库来进行访问。这在自签名的 HTTPS 证书的场景下尤为有效。

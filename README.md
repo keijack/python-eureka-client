@@ -275,10 +275,22 @@ eureka_client.init(eureka_server="http://your-eureka-server-peer1,http://your-eu
                    app_name="your_app_name",
                    instance_port=your_rest_server_port,
                    ha_strategy=eureka_client.HA_STRATEGY_STICK)
+```
 
-# If you only use the discovery client
-eureka_client.init_discovery_client("http://192.168.3.116:8761/eureka/, http://192.168.3.116:8762/eureka/",
-                                    ha_strategy=eureka_client.HA_STRATEGY_STICK)
+If the build-in stratergies do not satify you, you can load all the registry by following code:
+
+```python
+import py_eureka_client.eureka_client as eureka_client
+
+client = eureka_client.get_client()
+app = client.applications.get_application("OTHER-SERVICE-NAME")
+up_instances = app.up_instances
+up_instances_same_zone = app.up_instances_in_zone(client.zone)
+up_instances_other_zone = app.up_instances_not_in_zone(client.zone)
+inst = up_instances[0]
+
+# ... construct your url and do the service call
+
 ```
 
 ### Use Other Http Client
