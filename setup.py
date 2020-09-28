@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="py_eureka_client",
-    version="0.8.2",
+    version="0.8.3",
     author="Keijack",
     author_email="keijack.wu@gmail.com",
     description="A eureka client written in python. Support registering your python component to Eureka Server, as well as calling remote services by pulling the the Eureka registry. ",
