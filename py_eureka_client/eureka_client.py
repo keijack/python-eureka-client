@@ -41,10 +41,10 @@ except ImportError:
     from urllib import quote
 
 
+import py_eureka_client.http_client as http_client
 from py_eureka_client.logger import get_logger
 from py_eureka_client.__dns_txt_resolver import get_txt_dns_record
-from py_eureka_client.__aws_ec2_metadata_loader import get_ec2_metadata
-import py_eureka_client.http_client as http_client
+from py_eureka_client.__aws_info_loader import AmazonInfo
 
 
 try:
@@ -104,9 +104,10 @@ _DEFAULT_DATA_CENTER_INFO = "MyOwn"
 _DEFAULT_DATA_CENTER_INFO_CLASS = "com.netflix.appinfo.InstanceInfo$DefaultDataCenterInfo"
 _AMAZON_DATA_CENTER_INFO_CLASS = "com.netflix.appinfo.AmazonInfo"
 """
-Default encoding
+Default configurations
 """
 _DEFAULT_ENCODING = "utf-8"
+_DEFAUTL_ZONE = "default"
 
 ### =========================> Base Mehods <======================================== ###
 ### Beans ###
@@ -195,12 +196,12 @@ class Application:
 
     def up_instances_in_zone(self, zone):
         with self.__inst_lock:
-            _zone = zone if zone else "defaultZone"
+            _zone = zone if zone else _DEFAUTL_ZONE
             return [item for item in self.__instances_dict.values() if item.status == INSTANCE_STATUS_UP and item.zone == _zone]
 
     def up_instances_not_in_zone(self, zone):
         with self.__inst_lock:
-            _zone = zone if zone else "defaultZone"
+            _zone = zone if zone else _DEFAUTL_ZONE
             return [item for item in self.__instances_dict.values() if item.status == INSTANCE_STATUS_UP and item.zone != _zone]
 
 
@@ -296,10 +297,13 @@ class Instance(object):
 
     @property
     def zone(self):
+        if self.dataCenterInfo and self.dataCenterInfo.name == "Amazon" \
+                and self.dataCenterInfo.metadata and "availability-zone" in self.dataCenterInfo.metadata:
+            return self.dataCenterInfo.metadata["availability-zone"]
         if self.metadata and "zone" in self.metadata and self.metadata["zone"]:
             return self.metadata["zone"]
         else:
-            return "defaultZone"
+            return _DEFAUTL_ZONE
 
 
 ########################## Basic functions #################################
@@ -591,7 +595,9 @@ class EurekaServerConf(object):
                  zone=""):
         self.__servers = {}
         self.region = region
-        self.zone = _zone = zone if zone else "defaultZone"
+        self.__zone = zone
+        self.__eureka_availability_zones = eureka_availability_zones
+        _zone = zone if zone else _DEFAUTL_ZONE
         if eureka_domain:
             zone_urls = get_txt_dns_record("txt.%s.%s" % (region, eureka_domain))
             for zone_url in zone_urls:
@@ -614,7 +620,17 @@ class EurekaServerConf(object):
         if _zone in self.__servers_not_in_zone:
             del self.__servers_not_in_zone[_zone]
 
-    def _format_url(self, server_url="", eureka_protocol="http",
+    @property
+    def zone(self):
+        if self.__zone:
+            return self.__zone
+        elif self.__eureka_availability_zones:
+            return self.__eureka_availability_zones.keys()[0]
+        else:
+            return _DEFAUTL_ZONE
+
+    def _format_url(self, server_url="",
+                    eureka_protocol="http",
                     eureka_basic_auth_user="",
                     eureka_basic_auth_password="",
                     eureka_context="eureka/v2"):
@@ -689,7 +705,7 @@ class EurekaClient(object):
                 "us-east-1d": "http://ec2-552-627-568-170.compute-1.amazonaws.com:7001/eureka/v2/",
                 "us-east-1e": "http://ec2-500-179-285-592.compute-1.amazonaws.com:7001/eureka/v2/"}, 
                 zone="us-east-1c",
-                app_name="python_module_1", 
+                app_name="python_module_1",
                 instance_port=9090,
                 data_center_name="Amazon")
 
@@ -768,7 +784,7 @@ class EurekaClient(object):
 
     * region: The region when using DNS discovery.
 
-    * zone: Which zone your instances belong to, default is `defaultZone`.
+    * zone: Which zone your instances belong to, default is `default`.
 
     * eureka_availability_zones: The zones' url configurations.
 
@@ -917,10 +933,8 @@ class EurekaClient(object):
         mdata = {
             'management.port': str(instance_port)
         }
-        if zone and zone != "defaultZone":
+        if zone:
             mdata["zone"] = zone
-        elif data_center_name == "Amazon":
-            mdata["zone"] = get_ec2_metadata("placement/availability-zone")
         mdata.update(metadata)
         self.__instance = {
             'instanceId': instance_id if instance_id != "" else "%s:%s:%d" % (self.__instance_host, app_name.lower(), instance_port),
@@ -970,16 +984,30 @@ class EurekaClient(object):
         self.__application_mth_lock = RLock()
 
     def __load_ec2_metadata_dict(self):
-        return {'ami-launch-index': get_ec2_metadata('ami-launch-index'),
-                'local-hostname': get_ec2_metadata('local-hostname'),
-                'availability-zone': get_ec2_metadata('availability-zone'),
-                'instance-id': get_ec2_metadata('instance-id'),
-                'public-ipv4': get_ec2_metadata('public-ipv4'),
-                'public-hostname': get_ec2_metadata('public-hostname'),
-                'ami-manifest-path': get_ec2_metadata('ami-manifest-path'),
-                'local-ipv4': get_ec2_metadata('local-ipv4'),
-                'ami-id': get_ec2_metadata('ami-id'),
-                'instance-type': get_ec2_metadata('instance-type')}
+        # instance metadata
+        amazon_info = AmazonInfo()
+        mac = amazon_info.get_ec2_metadata('mac')
+        if mac:
+            vpc_id = amazon_info.get_ec2_metadata('network/interfaces/macs/%s/vpc-id' % mac)
+        else:
+            vpc_id = ""
+        metadata = {
+            'instance-id': amazon_info.get_ec2_metadata('instance-id'),
+            'ami-id': amazon_info.get_ec2_metadata('ami-id'),
+            'instance-type': amazon_info.get_ec2_metadata('instance-type'),
+            'local-ipv4': amazon_info.get_ec2_metadata('local-ipv4'),
+            'local-hostname': amazon_info.get_ec2_metadata('local-hostname'),
+            'availability-zone': amazon_info.get_ec2_metadata('placement/availability-zone'),
+            'public-hostname': amazon_info.get_ec2_metadata('public-hostname'),
+            'public-ipv4': amazon_info.get_ec2_metadata('public-ipv4'),
+            'mac': mac,
+            'vpcId': vpc_id
+        }
+        # accountId
+        doc = amazon_info.get_instance_identity_document()
+        if doc and "accountId" in doc:
+            metadata["accountId"] = doc["accountId"]
+        return metadata
 
     @property
     def should_register(self):
@@ -1037,10 +1065,10 @@ class EurekaClient(object):
         else:
             self.__try_eureka_server_regardless_zones(fun)
 
-    def __try_eureka_servers_in_list(self, fun, eureka_servers=[], zone="defaultZone"):
+    def __try_eureka_servers_in_list(self, fun, eureka_servers=[], zone=_DEFAUTL_ZONE):
         with self.__net_lock:
             ok = False
-            _zone = zone if zone else "defaultZone"
+            _zone = zone if zone else _DEFAUTL_ZONE
             for url in eureka_servers:
                 url = url.strip()
                 try:
