@@ -387,5 +387,10 @@ logger.set_level("DEBUG")
 
 这个日志使用了一个背景线程来输出日志，因此其非常适合使用在多线程的场景，特别你是你有多个 logger 共用一个 `TimedRotatingFileHandler` 的时候。在多线程的场景下，这个日志控制器经常不能正常地按时切割文件。
 
+## 亚马逊数据中心支持
+
+理论上，这个组件可以正常运行在亚马逊的数据中心。当运行在亚马逊数据中心，会从亚马逊的 metadata 服务中取得相关的元数据并且自动填充到 DataCenterInfo 中，填充的字段信息来源自 Netflix 的 Java 客户端中的 `com.netflix.appinfo.AmazonInfo` 类。**不过**，由于我本人没有亚马逊的相关环境作为测试，所以，在实际的运行当中，可能会发生错误。如果真的发生了错误的话，请提出 ISSUE 并且提供详细的日志，我会尽力支持。如果运行没有问题，如果可以，也欢迎在 `https://github.com/keijack/python-eureka-client/issues/33` 做一个回复。
+
+## 更多信息
 
 **其他更多的信息请查看项目注释。**
