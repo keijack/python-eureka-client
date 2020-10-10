@@ -357,6 +357,8 @@ class MyHttpClient(http_client.HttpClient):
 http_client.set_http_client_class(MyHttpClient)
 ```
 
+你可在这个[问题](https://github.com/keijack/python-eureka-client/issues/35#issuecomment-706510869)中找到实际应用的例子。
+
 ### 日志
 
 默认情况下，日志会输出到控制台，你创建自己的 Logging Handler 来将日志输出到别处，例如一个滚动文件中：

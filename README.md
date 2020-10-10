@@ -335,6 +335,8 @@ class MyHttpClient(http_client.HttpClient):
 http_client.set_http_client_class(MyHttpClient)
 ```
 
+You can find an example in this [issue](https://github.com/keijack/python-eureka-client/issues/35#issuecomment-706510869)
+
 ### Logger
 
 The default logger is try to write logs to the screen, you can specify the logger handler to write it to a file.

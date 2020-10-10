@@ -104,7 +104,7 @@ venv.bak/
 .mypy_cache/
 
 /my_test
-my_test_main.py
+my_test_*
 upload.sh
 
 # vscode
