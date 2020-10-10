@@ -683,11 +683,14 @@ class EurekaServerConf(object):
     def servers_not_in_zone(self):
         return self.__servers_not_in_zone
 
+
 class RegisterException(Exception):
     pass
 
+
 class DiscoverException(Exception):
     pass
+
 
 class EurekaClient(object):
     """
@@ -1036,9 +1039,23 @@ class EurekaClient(object):
             return self.__applications
 
     def __try_eureka_server_in_cache(self, fun):
+        ok = False
+        invalid_keys = []
         for z, url in self.__cache_eureka_url.items():
-            _logger.debug("try to do %s in zone[%s] using cached url %s. " % (fun.__name__, z, url))
-            fun(url)
+            try:
+                _logger.debug("Try to do %s in zone[%s] using cached url %s. " % (fun.__name__, z, url))
+                fun(url)
+            except (http_client.HTTPError, http_client.URLError):
+                _logger.exception("Eureka server [%s] is down, use next url to try." % url)
+                invalid_keys.append(z)
+            else:
+                ok = True
+        if invalid_keys:
+            _logger.debug("Invalid keys::%s will be removed from cache." % str(invalid_keys))
+            for z in invalid_keys:
+                del self.__cache_eureka_url[z]
+        if not ok:
+            raise RegisterException("All eureka servers in cache are down!")
 
     def __try_eureka_server_in_zone(self, fun):
         self.__try_eureka_servers_in_list(fun, self.__eureka_server_conf.servers_in_zone, self.zone)
@@ -1047,27 +1064,27 @@ class EurekaClient(object):
         for zone, urls in self.__eureka_server_conf.servers_not_in_zone.items():
             try:
                 self.__try_eureka_servers_in_list(fun, urls, zone)
-            except (http_client.HTTPError, http_client.URLError):
+            except RegisterException:
                 _logger.exception("error!")
             else:
                 return
-        raise http_client.URLError("All eureka servers in all zone are down!")
+        raise RegisterException("All eureka servers in all zone are down!")
 
     def __try_eureka_server_regardless_zones(self, fun):
         for zone, urls in self.__eureka_server_conf.servers.items():
             try:
                 self.__try_eureka_servers_in_list(fun, urls, zone)
-            except (http_client.HTTPError, http_client.URLError):
+            except RegisterException:
                 _logger.exception("error!")
             else:
                 return
-        raise http_client.URLError("All eureka servers in all zone are down!")
+        raise RegisterException("All eureka servers in all zone are down!")
 
     def __try_all_eureka_servers(self, fun):
         if self.__prefer_same_zone:
             try:
                 self.__try_eureka_server_in_zone(fun)
-            except (http_client.HTTPError, http_client.URLError):
+            except RegisterException:
                 self.__try_eureka_server_not_in_zone(fun)
         else:
             self.__try_eureka_server_regardless_zones(fun)
@@ -1091,13 +1108,13 @@ class EurekaClient(object):
             if not ok:
                 if _zone in self.__cache_eureka_url:
                     del self.__cache_eureka_url[_zone]
-                raise http_client.URLError("All eureka servers in zone[%s] are down!" % _zone)
+                raise RegisterException("All eureka servers in zone[%s] are down!" % _zone)
 
     def __connect_to_eureka_server(self, fun):
         if self.__cache_eureka_url:
             try:
                 self.__try_eureka_server_in_cache(fun)
-            except (http_client.HTTPError, http_client.URLError):
+            except RegisterException:
                 self.__try_all_eureka_servers(fun)
         else:
             self.__try_all_eureka_servers(fun)
