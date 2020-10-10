@@ -683,6 +683,11 @@ class EurekaServerConf(object):
     def servers_not_in_zone(self):
         return self.__servers_not_in_zone
 
+class RegisterException(Exception):
+    pass
+
+class DiscoverException(Exception):
+    pass
 
 class EurekaClient(object):
     """
@@ -1023,6 +1028,8 @@ class EurekaClient(object):
 
     @property
     def applications(self):
+        if not self.should_discover:
+            raise DiscoverException("should_discover set to False, no registry is pulled, cannot find any applications.")
         with self.__application_mth_lock:
             if self.__applications is None:
                 self.__pull_full_registry()
@@ -1075,7 +1082,7 @@ class EurekaClient(object):
                     _logger.debug("try to do %s in zone[%s] using url %s. " % (fun.__name__, _zone, url))
                     fun(url)
                 except (http_client.HTTPError, http_client.URLError):
-                    _logger.warn("Eureka server [%s] is down, use next url to try." % url)
+                    _logger.exception("Eureka server [%s] is down, use next url to try." % url)
                 else:
                     ok = True
                     self.__cache_eureka_url[_zone] = url
@@ -1182,7 +1189,7 @@ class EurekaClient(object):
         self.__connect_to_eureka_server(lambda url: delete_status_override(
             url, self.__instance["app"], self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"]))
 
-    def __start_registery(self):
+    def __start_register(self):
         _logger.debug("start to registry client...")
         self.register()
 
@@ -1439,9 +1446,9 @@ class EurekaClient(object):
         self.__pull_full_registry()
 
     def start(self):
-        if self.__should_register:
-            self.__start_registery()
-        if self.__should_discover:
+        if self.should_register:
+            self.__start_register()
+        if self.should_discover:
             self.__start_discover()
         self.__heartbeat_timer.start()
 
