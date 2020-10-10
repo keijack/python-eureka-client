@@ -369,7 +369,7 @@ This logger will first save all the log record to a global queue, and then outpu
 
 ## Amazon Data Center Support
 
-This component should support deploying in Amazone EC2, it should automatically load metadata from Amazon metadata service. All the metadata keys are comes from `com.netflix.appinfo.AmazonInfo` in Netflix's java client. BUT for I have no amazon environment to test, so it may not work. If errors occurs, please submit an issue and provide some detail logs, I will try to fix it as far as I can. If it works, a reply in `https://github.com/keijack/python-eureka-client/issues/33` is wellcomed.
+This component should support deploying in Amazone EC2, it should automatically load metadata from Amazon metadata service. All the metadata keys are comes from `com.netflix.appinfo.AmazonInfo` in Netflix's java client. BUT for I have no amazon environment to test, so it may not work. If errors occurs, please submit an issue and provide some detail logs, I will try to fix it as far as I can. If it works, a reply in this [issue](https://github.com/keijack/python-eureka-client/issues/33) is wellcomed.
 
 ## More Infomation
 
