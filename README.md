@@ -16,10 +16,10 @@ Python 2.7 / 3.6+ (It should also work at 3.5, not test)
 * Support failover.
 * Support DNS discovery. 
 * Send heartbeat to eureka server.
-* Auto unregister from eureka server when your server down.
-* Discovery apps from eureka server.
+* Auto unregister from eureka server when your server goes down.
+* Pull registry from eureka server.
 * Easy to use interface to use other REST service.
-* Auto try other nodes when one nodes down.
+* HA when calling other REST service.
 
 ## How to use
 
@@ -67,7 +67,7 @@ client.stop()
 
 In fact, the `init` function is a facade of the EurekaClient, it holds a client object behind, you can get that by catching its return value or use `eureka_client.get_client()` to get it. The `init` function will automatically start and stop the client while using raw `EurekaClient`, you must call the `start()` and `stop()` method explicitly. 
 
-*In the following document, I will use the facade functions as the example, please note that you can find all the method with the same name in the `EurekaClient` class.*
+*In this document, I will use the facade functions as the example, please note that you can find all the method with the same name in the `EurekaClient` class.*
 
 ### Registering to Eureka Server
 
@@ -124,7 +124,7 @@ eureka_client.init(eureka_domain="mydomaintest.netflix.net",
                 data_center_name="Amazon")
 ```
 
-*Please note that, `py-eureka-client` first try to use `dnspython` to resolve the dns domain, but because `dnspython` will not support python2 in version 2.0.0, and `py-eureka-client` still supports python2, so `dnspython` component is not include by this module. so you should install it manually.*
+*Please note that, `py-eureka-client` first try to use `dnspython` to resolve the dns domain, but because `dnspython` does not support python2 in version 2.0.0 that `py-eureka-client` still supports, so `dnspython` component is not included in this module. So you should install it manually.*
 
 *In python3:*
 
@@ -369,7 +369,7 @@ This logger will first save all the log record to a global queue, and then outpu
 
 ## Amazon Data Center Support
 
-This component should support deploying in Amazone EC2, it should automatically load metadata from Amazon metadata service. All the metadata keys are comes from `com.netflix.appinfo.AmazonInfo` in Netflix's java client. BUT for I have no amazon environment to test, so it may not work. If errors occurs, please submit an issue and provide some detail logs, I will try to fix it as far as I can. If it works, a reply in this [issue](https://github.com/keijack/python-eureka-client/issues/33) is wellcomed.
+This component should support deploying in Amazone EC2, it should automatically load metadata from Amazon metadata service. All the metadata keys come from `com.netflix.appinfo.AmazonInfo` in Netflix's java client. BUT for the reason that I have no amazon environment to test, it may not work. If errors occurs, please submit an issue and provide some detail logs, I will try to fix it as far as I can. If it works, a reply in this [issue](https://github.com/keijack/python-eureka-client/issues/33) is wellcomed.
 
 ## More Infomation
 
