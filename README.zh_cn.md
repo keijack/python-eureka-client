@@ -331,6 +331,11 @@ import py_eureka_client.http_client as http_client
 # 1. 继承 `py_eureka_client.http_client` 中的 `HttpClient` 类。
 class MyHttpClient(http_client.HttpClient):
 
+    # 如果你需要自定义一些字段，也请不要修改构造方法的参数值。在这种情况下，使用 *args, **kwargs 是一个很好的选择。
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kw)
+        self.other_field = "..."
+
     # 2. 重写该类的 `urlopen` 方法，注意：该方法返回的是响应体的文本。
     # 请注意，如果你要抛出异常，请确保抛出的是 urllib.error.HTTPError 或者 urllib.error.URLError
     # (Python 2 则分别是 urllib2.HTTPError 或者 urllib2.URLError) 否则可能会发生未可知之错误。

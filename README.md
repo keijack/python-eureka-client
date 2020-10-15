@@ -309,6 +309,11 @@ import py_eureka_client.http_client as http_client
 # 1. Inherit the `HttpClient` class in `py_eureka_client.http_client`.
 class MyHttpClient(http_client.HttpClient):
 
+    # If you have some appended fields, please do not change the constructor, use *args, **kwargs is a good idea.
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kw)
+        self.other_field = "..."
+
     # 2. Rewrite the `urlopen` method in your class.
     # If you want to raise an exception, please make sure that the exception is an `urllib.error.HTTPError` or `urllib.error.URLError`
     # (urllib2.HTTPError or urllib2.URLError in python 2), or it may cause some un-handled errors.
