@@ -1046,7 +1046,7 @@ class EurekaClient(object):
                 _logger.debug("Try to do %s in zone[%s] using cached url %s. " % (fun.__name__, z, url))
                 fun(url)
             except (http_client.HTTPError, http_client.URLError):
-                _logger.exception("Eureka server [%s] is down, use next url to try." % url)
+                _logger.warn("Eureka server [%s] is down, use next url to try." % url, exc_info=True)
                 invalid_keys.append(z)
             else:
                 ok = True
@@ -1065,7 +1065,7 @@ class EurekaClient(object):
             try:
                 self.__try_eureka_servers_in_list(fun, urls, zone)
             except RegisterException:
-                _logger.exception("error!")
+                _logger.warn("try eureka servers in zone[%s] error!" % zone, exc_info=True)
             else:
                 return
         raise RegisterException("All eureka servers in all zone are down!")
@@ -1075,7 +1075,7 @@ class EurekaClient(object):
             try:
                 self.__try_eureka_servers_in_list(fun, urls, zone)
             except RegisterException:
-                _logger.exception("error!")
+                _logger.warn("try eureka servers in zone[%s] error!" % zone, exc_info=True)
             else:
                 return
         raise RegisterException("All eureka servers in all zone are down!")
@@ -1099,7 +1099,7 @@ class EurekaClient(object):
                     _logger.debug("try to do %s in zone[%s] using url %s. " % (fun.__name__, _zone, url))
                     fun(url)
                 except (http_client.HTTPError, http_client.URLError):
-                    _logger.exception("Eureka server [%s] is down, use next url to try." % url)
+                    _logger.warn("Eureka server [%s] is down, use next url to try." % url, exc_info=True)
                 else:
                     ok = True
                     self.__cache_eureka_url[_zone] = url
@@ -1168,7 +1168,7 @@ class EurekaClient(object):
             self.__connect_to_eureka_server(lambda url: _register(url, self.__instance))
         except:
             self.__alive = False
-            _logger.exception("register error!")
+            _logger.warn("Register error! Will try in next heartbeat. ", exc_info=True)
         else:
             _logger.debug("register successfully!")
             self.__alive = True
@@ -1177,7 +1177,7 @@ class EurekaClient(object):
         try:
             self.__connect_to_eureka_server(lambda url: cancel(url, self.__instance["app"], self.__instance["instanceId"]))
         except:
-            _logger.exception("error!")
+            _logger.warn("Cancel error!", exc_info=True)
         else:
             self.__alive = False
 
@@ -1190,8 +1190,7 @@ class EurekaClient(object):
                                                                       self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"],
                                                                       status=self.__instance["status"], overriddenstatus=overridden_status))
         except:
-            _logger.exception("Error!")
-            _logger.info("Cannot send heartbeat to server, try to register")
+            _logger.warn("Cannot send heartbeat to server, try to register. ", exc_info=True)
             self.register()
 
     def status_update(self, new_status):
@@ -1200,7 +1199,7 @@ class EurekaClient(object):
             self.__connect_to_eureka_server(lambda url: status_update(url, self.__instance["app"], self.__instance["instanceId"],
                                                                       self.__instance["lastDirtyTimestamp"], new_status))
         except:
-            _logger.exception("error!")
+            _logger.warn("update status error!", exc_info=True)
 
     def delete_status_override(self):
         self.__connect_to_eureka_server(lambda url: delete_status_override(
@@ -1232,7 +1231,7 @@ class EurekaClient(object):
         try:
             self.__connect_to_eureka_server(do_pull)
         except:
-            _logger.exception("pull full registry from eureka server error!")
+            _logger.warn("pull full registry from eureka server error!", exc_info=True)
 
     def __fetch_delta(self):
         def do_fetch(url):
@@ -1252,7 +1251,7 @@ class EurekaClient(object):
         try:
             self.__connect_to_eureka_server(do_fetch)
         except:
-            _logger.exception("fetch delta from eureka server error!")
+            _logger.warn("fetch delta from eureka server error!", exc_info=True)
 
     def __is_hash_match(self):
         app_hash = self.__get_applications_hash()
