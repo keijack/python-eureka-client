@@ -29,7 +29,6 @@ from logging import StreamHandler
 from threading import Thread
 
 _LOG_LEVEL_ = "INFO"
-__loggers = {}
 __cache_loggers = {}
 
 __formatter_ = logging.Formatter(

@@ -24,7 +24,6 @@ SOFTWARE.
 
 import atexit
 import json
-import os
 import re
 import socket
 import time
@@ -366,6 +365,17 @@ def cancel(eureka_server, app_name, instance_id):
     http_client.load(req, timeout=_DEFAULT_TIME_OUT)
 
 
+def send_heartbeat(eureka_server, app_name, instance_id, last_dirty_timestamp, status=INSTANCE_STATUS_UP, overriddenstatus=""):
+    url = _format_url(eureka_server) + "apps/%s/%s?status=%s&lastDirtyTimestamp=%s" % \
+        (quote(app_name), quote(instance_id), status, str(last_dirty_timestamp))
+    if overriddenstatus != "":
+        url += "&overriddenstatus=" + overriddenstatus
+
+    req = http_client.Request(url)
+    req.get_method = lambda: "PUT"
+    http_client.load(req, timeout=_DEFAULT_TIME_OUT)
+
+
 def status_update(eureka_server, app_name, instance_id, last_dirty_timestamp, status=INSTANCE_STATUS_UP, overriddenstatus=""):
     url = _format_url(eureka_server) + "apps/%s/%s/status?value=%s&lastDirtyTimestamp=%s" % \
         (quote(app_name), quote(instance_id), status, str(last_dirty_timestamp))
@@ -684,7 +694,7 @@ class EurekaServerConf(object):
         return self.__servers_not_in_zone
 
 
-class RegisterException(Exception):
+class EurekaServerConnectionException(Exception):
     pass
 
 
@@ -1055,7 +1065,7 @@ class EurekaClient(object):
             for z in invalid_keys:
                 del self.__cache_eureka_url[z]
         if not ok:
-            raise RegisterException("All eureka servers in cache are down!")
+            raise EurekaServerConnectionException("All eureka servers in cache are down!")
 
     def __try_eureka_server_in_zone(self, fun):
         self.__try_eureka_servers_in_list(fun, self.__eureka_server_conf.servers_in_zone, self.zone)
@@ -1064,27 +1074,27 @@ class EurekaClient(object):
         for zone, urls in self.__eureka_server_conf.servers_not_in_zone.items():
             try:
                 self.__try_eureka_servers_in_list(fun, urls, zone)
-            except RegisterException:
+            except EurekaServerConnectionException:
                 _logger.warn("try eureka servers in zone[%s] error!" % zone, exc_info=True)
             else:
                 return
-        raise RegisterException("All eureka servers in all zone are down!")
+        raise EurekaServerConnectionException("All eureka servers in all zone are down!")
 
     def __try_eureka_server_regardless_zones(self, fun):
         for zone, urls in self.__eureka_server_conf.servers.items():
             try:
                 self.__try_eureka_servers_in_list(fun, urls, zone)
-            except RegisterException:
+            except EurekaServerConnectionException:
                 _logger.warn("try eureka servers in zone[%s] error!" % zone, exc_info=True)
             else:
                 return
-        raise RegisterException("All eureka servers in all zone are down!")
+        raise EurekaServerConnectionException("All eureka servers in all zone are down!")
 
     def __try_all_eureka_servers(self, fun):
         if self.__prefer_same_zone:
             try:
                 self.__try_eureka_server_in_zone(fun)
-            except RegisterException:
+            except EurekaServerConnectionException:
                 self.__try_eureka_server_not_in_zone(fun)
         else:
             self.__try_eureka_server_regardless_zones(fun)
@@ -1108,13 +1118,13 @@ class EurekaClient(object):
             if not ok:
                 if _zone in self.__cache_eureka_url:
                     del self.__cache_eureka_url[_zone]
-                raise RegisterException("All eureka servers in zone[%s] are down!" % _zone)
+                raise EurekaServerConnectionException("All eureka servers in zone[%s] are down!" % _zone)
 
     def __connect_to_eureka_server(self, fun):
         if self.__cache_eureka_url:
             try:
                 self.__try_eureka_server_in_cache(fun)
-            except RegisterException:
+            except EurekaServerConnectionException:
                 self.__try_all_eureka_servers(fun)
         else:
             self.__try_all_eureka_servers(fun)
@@ -1165,7 +1175,9 @@ class EurekaClient(object):
         self.__instance["lastUpdatedTimestamp"] = str(_current_time_millis())
         self.__instance["lastDirtyTimestamp"] = str(_current_time_millis())
         try:
-            self.__connect_to_eureka_server(lambda url: _register(url, self.__instance))
+            def do_register(url):
+                _register(url, self.__instance)
+            self.__connect_to_eureka_server(do_register)
         except:
             self.__alive = False
             _logger.warn("Register error! Will try in next heartbeat. ", exc_info=True)
@@ -1175,7 +1187,9 @@ class EurekaClient(object):
 
     def cancel(self):
         try:
-            self.__connect_to_eureka_server(lambda url: cancel(url, self.__instance["app"], self.__instance["instanceId"]))
+            def do_cancel(url):
+                cancel(url, self.__instance["app"], self.__instance["instanceId"])
+            self.__connect_to_eureka_server(do_cancel)
         except:
             _logger.warn("Cancel error!", exc_info=True)
         else:
@@ -1186,9 +1200,13 @@ class EurekaClient(object):
             self.register()
             return
         try:
-            self.__connect_to_eureka_server(lambda url: status_update(url, self.__instance["app"],
-                                                                      self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"],
-                                                                      status=self.__instance["status"], overriddenstatus=overridden_status))
+            _logger.debug("sending heartbeat to eureka server. ")
+
+            def do_send_heartbeat(url):
+                send_heartbeat(url, self.__instance["app"],
+                               self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"],
+                               status=self.__instance["status"], overriddenstatus=overridden_status)
+            self.__connect_to_eureka_server(do_send_heartbeat)
         except:
             _logger.warn("Cannot send heartbeat to server, try to register. ", exc_info=True)
             self.register()
@@ -1196,8 +1214,10 @@ class EurekaClient(object):
     def status_update(self, new_status):
         self.__instance["status"] = new_status
         try:
-            self.__connect_to_eureka_server(lambda url: status_update(url, self.__instance["app"], self.__instance["instanceId"],
-                                                                      self.__instance["lastDirtyTimestamp"], new_status))
+            def do_status_update(url):
+                status_update(url, self.__instance["app"], self.__instance["instanceId"],
+                              self.__instance["lastDirtyTimestamp"], new_status)
+            self.__connect_to_eureka_server(do_status_update)
         except:
             _logger.warn("update status error!", exc_info=True)
 
