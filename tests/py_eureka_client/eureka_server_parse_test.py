@@ -27,12 +27,9 @@ import unittest
 import py_eureka_client.logger as logger
 from py_eureka_client.eureka_client import EurekaServerConf
 
+logger.set_level("DEBUG")
 
 class TestEurekaServer(unittest.TestCase):
-
-    def __init__(self, methodName):
-        super().__init__(methodName)
-        logger.set_level("DEBUG")
 
     def test_init_eureka_server(self):
         es = EurekaServerConf(eureka_server="https://a@10.0.2.16:8761/eureka,https://10.0.2.16:8762",

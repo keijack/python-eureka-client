@@ -44,6 +44,7 @@ import py_eureka_client.http_client as http_client
 from py_eureka_client.logger import get_logger
 from py_eureka_client.__dns_txt_resolver import get_txt_dns_record
 from py_eureka_client.__aws_info_loader import AmazonInfo
+from py_eureka_client.__netint_utils import get_ip_and_host
 
 
 try:
@@ -948,49 +949,51 @@ class EurekaClient(object):
         if should_register:
             self.__connect_to_eureka_server(try_to_get_client_ip)
 
-        mdata = {
-            'management.port': str(instance_port)
-        }
-        if zone:
-            mdata["zone"] = zone
-        mdata.update(metadata)
-        self.__instance = {
-            'instanceId': instance_id if instance_id != "" else "%s:%s:%d" % (self.__instance_host, app_name.lower(), instance_port),
-            'hostName': self.__instance_host,
-            'app': app_name.upper(),
-            'ipAddr': self.__instance_ip,
-            'port': {
-                '$': instance_port,
-                '@enabled': str(instance_unsecure_port_enabled).lower()
-            },
-            'securePort': {
-                '$': instance_secure_port,
-                '@enabled': str(instance_secure_port_enabled).lower()
-            },
-            'countryId': 1,
-            'dataCenterInfo': {
-                '@class': _AMAZON_DATA_CENTER_INFO_CLASS if data_center_name == "Amazon" else _DEFAULT_DATA_CENTER_INFO_CLASS,
-                'name': data_center_name
-            },
-            'leaseInfo': {
-                'renewalIntervalInSecs': renewal_interval_in_secs,
-                'durationInSecs': duration_in_secs,
-                'registrationTimestamp': 0,
-                'lastRenewalTimestamp': 0,
-                'evictionTimestamp': 0,
-                'serviceUpTimestamp': 0
-            },
-            'metadata': mdata,
-            'homePageUrl': EurekaClient.__format_url(home_page_url, self.__instance_host, instance_port),
-            'statusPageUrl': EurekaClient.__format_url(status_page_url, self.__instance_host, instance_port, "info"),
-            'healthCheckUrl': EurekaClient.__format_url(health_check_url, self.__instance_host, instance_port, "health"),
-            'secureHealthCheckUrl': secure_health_check_url,
-            'vipAddress': vip_adr if vip_adr != "" else app_name.lower(),
-            'secureVipAddress': secure_vip_addr if secure_vip_addr != "" else app_name.lower(),
-            'isCoordinatingDiscoveryServer': str(is_coordinating_discovery_server).lower()
-        }
-        if data_center_name == "Amazon":
-            self.__instance["dataCenterInfo"]["metadata"] = self.__load_ec2_metadata_dict()
+            mdata = {
+                'management.port': str(instance_port)
+            }
+            if zone:
+                mdata["zone"] = zone
+            mdata.update(metadata)
+            self.__instance = {
+                'instanceId': instance_id if instance_id != "" else "%s:%s:%d" % (self.__instance_host, app_name.lower(), instance_port),
+                'hostName': self.__instance_host,
+                'app': app_name.upper(),
+                'ipAddr': self.__instance_ip,
+                'port': {
+                    '$': instance_port,
+                    '@enabled': str(instance_unsecure_port_enabled).lower()
+                },
+                'securePort': {
+                    '$': instance_secure_port,
+                    '@enabled': str(instance_secure_port_enabled).lower()
+                },
+                'countryId': 1,
+                'dataCenterInfo': {
+                    '@class': _AMAZON_DATA_CENTER_INFO_CLASS if data_center_name == "Amazon" else _DEFAULT_DATA_CENTER_INFO_CLASS,
+                    'name': data_center_name
+                },
+                'leaseInfo': {
+                    'renewalIntervalInSecs': renewal_interval_in_secs,
+                    'durationInSecs': duration_in_secs,
+                    'registrationTimestamp': 0,
+                    'lastRenewalTimestamp': 0,
+                    'evictionTimestamp': 0,
+                    'serviceUpTimestamp': 0
+                },
+                'metadata': mdata,
+                'homePageUrl': EurekaClient.__format_url(home_page_url, self.__instance_host, instance_port),
+                'statusPageUrl': EurekaClient.__format_url(status_page_url, self.__instance_host, instance_port, "info"),
+                'healthCheckUrl': EurekaClient.__format_url(health_check_url, self.__instance_host, instance_port, "health"),
+                'secureHealthCheckUrl': secure_health_check_url,
+                'vipAddress': vip_adr if vip_adr != "" else app_name.lower(),
+                'secureVipAddress': secure_vip_addr if secure_vip_addr != "" else app_name.lower(),
+                'isCoordinatingDiscoveryServer': str(is_coordinating_discovery_server).lower()
+            }
+            if data_center_name == "Amazon":
+                self.__instance["dataCenterInfo"]["metadata"] = self.__load_ec2_metadata_dict()
+        else:
+            self.__instance = {}
 
         # For discovery
         self.__remote_regions = remote_regions if remote_regions is not None else []
