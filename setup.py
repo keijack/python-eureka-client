@@ -21,6 +21,9 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/keijack/python-eureka-client",
     packages=setuptools.find_packages(),
+    install_requires=[
+        "netifaces"
+    ],
     classifiers=[
         "Programming Language :: Python :: 2.7",
         "Programming Language :: Python :: 3.6",

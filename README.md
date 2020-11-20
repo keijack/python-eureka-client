@@ -168,6 +168,24 @@ eureka_client.init(eureka_server="your-eureka-server-peer1,your-eureka-server-pe
                 instance_port=9090)
 ```
 
+*About the instance `IP` and `hostname`*:
+
+If you are using a `Amazon` data center, `py-eureka-client` will try to use `local-ipv4` and `local-hostname` get from Amazon metadata service. In other cases, `py-eureka-client` will use the fist non-loopback ip address and hostname from your net interface. 
+
+You can also specify both these tow field or just one of them explicitly:
+
+```python
+eureka_client.init(eureka_server="your-eureka-server-peer1,your-eureka-server-peer2",
+                eureka_protocol="https",
+                eureka_basic_auth_user="keijack",
+                eureka_basic_auth_password="kjauthpass",
+                eureka_context="/eureka/v2",
+                app_name="python_module_1", 
+                instance_ip="192.168.10.168",
+                instance_host="my-py-component.mydomian.com",
+                instance_port=9090)
+```
+
 ### Call Remote Service
 
 After `init` the eureka client, this is the most simplist way to do service:
@@ -376,6 +394,11 @@ This logger will first save all the log record to a global queue, and then outpu
 
 This component should support deploying in Amazone EC2, it should automatically load metadata from Amazon metadata service. All the metadata keys come from `com.netflix.appinfo.AmazonInfo` in Netflix's java client. BUT for the reason that I have no amazon environment to test, it may not work. If errors occurs, please submit an issue and provide some detail logs, I will try to fix it as far as I can. If it works, a reply in this [issue](https://github.com/keijack/python-eureka-client/issues/33) is wellcomed.
 
+## Known Problems
+
+In python2, please do not set your `app_name`, `instance_id` or so with `UTF-8` ecoding, or it will rasie some Unicode encoding error. 
+
 ## More Infomation
 
 You can find more information in the project comments.
+

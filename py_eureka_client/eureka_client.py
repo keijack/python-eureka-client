@@ -41,11 +41,10 @@ except ImportError:
 
 
 import py_eureka_client.http_client as http_client
+import py_eureka_client.__netint_utils as netint
 from py_eureka_client.logger import get_logger
 from py_eureka_client.__dns_txt_resolver import get_txt_dns_record
 from py_eureka_client.__aws_info_loader import AmazonInfo
-from py_eureka_client.__netint_utils import get_ip_and_host
-
 
 try:
     long(0)
@@ -931,23 +930,24 @@ class EurekaClient(object):
         self.__alive = False
         self.__heartbeat_timer = Timer(renewal_interval_in_secs, self.__heartbeat)
         self.__heartbeat_timer.daemon = True
-
-        def try_to_get_client_ip(url):
-            if instance_host == "" and instance_ip == "":
-                self.__instance_host = self.__instance_ip = EurekaClient.__get_instance_ip(url)
-            elif instance_host != "" and instance_ip == "":
-                self.__instance_host = instance_host
-                if EurekaClient.__is_ip(instance_host):
-                    self.__instance_ip = instance_host
-                else:
-                    self.__instance_ip = EurekaClient.__get_instance_ip(url)
-            else:
-                self.__instance_host = instance_ip
-                self.__instance_ip = instance_ip
-
+        self.__instance_ip = instance_ip
+        self.__instance_host = instance_host
+        self.__aws_metadata = {}
+       
         # For Registery
         if should_register:
-            self.__connect_to_eureka_server(try_to_get_client_ip)
+            if data_center_name == "Amazon":
+                self.__aws_metadata = self.__load_ec2_metadata_dict()
+            if self.__instance_host == "" and self.__instance_ip == "":
+                self.__instance_ip, self.__instance_host = self.__get_ip_host()
+            elif self.__instance_host != "" and self.__instance_ip == "":
+                self.__instance_ip = netint.get_ip_by_host(self.__instance_host)
+                if not EurekaClient.__is_ip(self.__instance_ip):
+                    def try_to_get_client_ip(url):
+                        self.__instance_ip = EurekaClient.__get_instance_ip(url)
+                    self.__connect_to_eureka_server(try_to_get_client_ip)
+            elif self.__instance_host == "" and self.__instance_ip != "":
+                self.__instance_host = netint.get_host_by_ip(self.__instance_ip)
 
             mdata = {
                 'management.port': str(instance_port)
@@ -955,8 +955,10 @@ class EurekaClient(object):
             if zone:
                 mdata["zone"] = zone
             mdata.update(metadata)
+            ins_id = instance_id if instance_id != "" else "%s:%s:%d" % (self.__instance_ip, app_name.lower(), instance_port)
+            _logger.debug("register instance using id [#%s]" % ins_id)
             self.__instance = {
-                'instanceId': instance_id if instance_id != "" else "%s:%s:%d" % (self.__instance_host, app_name.lower(), instance_port),
+                'instanceId': ins_id,
                 'hostName': self.__instance_host,
                 'app': app_name.upper(),
                 'ipAddr': self.__instance_ip,
@@ -991,7 +993,7 @@ class EurekaClient(object):
                 'isCoordinatingDiscoveryServer': str(is_coordinating_discovery_server).lower()
             }
             if data_center_name == "Amazon":
-                self.__instance["dataCenterInfo"]["metadata"] = self.__load_ec2_metadata_dict()
+                self.__instance["dataCenterInfo"]["metadata"] = self.__aws_metadata
         else:
             self.__instance = {}
 
@@ -1003,6 +1005,15 @@ class EurekaClient(object):
         self.__ha_cache = {}
 
         self.__application_mth_lock = RLock()
+
+    def __get_ip_host(self):
+        ip, host = netint.get_ip_and_host()
+        if self.__aws_metadata and "local-ipv4" in self.__aws_metadata and self.__aws_metadata["local-ipv4"]:
+            ip = self.__aws_metadata["local-ipv4"]
+        if self.__aws_metadata and "local-hostname" in self.__aws_metadata and self.__aws_metadata["local-hostname"]:
+            host = self.__aws_metadata["local-hostname"]
+        return ip, host
+            
 
     def __load_ec2_metadata_dict(self):
         # instance metadata
