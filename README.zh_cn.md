@@ -192,6 +192,10 @@ eureka_client.init(eureka_server="your-eureka-server-peer1,your-eureka-server-pe
                 instance_port=9090)
 ```
 
+*关于默认的 `instance_ip` 和 `instance_host`*：
+
+如 Spring 的实现一样，`py-eureka-client` 在亚马逊的数据中心，会使用数据中心元数据服务取得的 `local-ipv4` 和 `local-hostname` 做为默认值，否则则会取第一个取得的具有 IPv4 的地址的网卡地址作为默认的地址。
+
 ### 调用远程服务
 
 当初始化完 eureka client 之后，你就可以通过拉取 eureka server 的信息来调用远程服务了。
@@ -397,6 +401,10 @@ logger.set_level("DEBUG")
 ## 亚马逊数据中心支持
 
 理论上，这个组件可以正常运行在亚马逊的数据中心。当运行在亚马逊数据中心，会从亚马逊的 metadata 服务中取得相关的元数据并且自动填充到 DataCenterInfo 中，填充的字段信息来源自 Netflix 的 Java 客户端中的 `com.netflix.appinfo.AmazonInfo` 类。**不过**，由于我本人没有亚马逊的相关环境作为测试，所以，在实际的运行当中，可能会发生错误。如果真的发生了错误的话，请提出 ISSUE 并且提供详细的日志，我会尽力支持。如果运行没有问题，如果可以，也欢迎在这个[问题](https://github.com/keijack/python-eureka-client/issues/33)进行回复。
+
+## 已知问题
+
+如果你使用 Python2，那么你的 `app_name`、`instance_id` 等字段请不要使用 Unicode 编码的字符，否则会抛出编码异常。我曾想过做支持，但是需要改的地方还是挺多的，并且 Python2 已经不再被官方支持，所以最终还是决定放弃了，不然代码维护起来是相当的麻烦。
 
 ## 更多信息
 
