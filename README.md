@@ -8,7 +8,9 @@ This is an eureka client written in python, you can easily intergrate your pytho
 
 ## Support Python Version
 
-Python 2.7 / 3.6+ (It should also work at 3.5, not test)
+Python 3.7+
+
+*From 0.9, python 2 is no longer supported, if you are using python 2, please use  version `0.8.8`.*
 
 ## Why choose
 
@@ -123,22 +125,6 @@ eureka_client.init(eureka_domain="mydomaintest.netflix.net",
                 instance_port=9090,
                 data_center_name="Amazon")
 ```
-
-*Please note that, `py-eureka-client` first try to use `dnspython` to resolve the dns domain, but because `dnspython` does not support python2 in version 2.0.0 that `py-eureka-client` still supports, so `dnspython` component is not included in this module. So you should install it manually.*
-
-*In python3:*
-
-```shell
-python3 -m pip install dnspython
-```
-
-*In python2:*
-
-```shell
-python2 -m pip install dnspython==1.16.0
-```
-
-*If you have no `dnspython` installed, `py-eureka-client` will try to use `host` command which is installed defaultly in many Linux distributes to do the dns resolving.*
 
 You can specify the protocol, basic authentication and context path of your eureka server separatly rather than setting it at the URL. 
 
@@ -337,16 +323,12 @@ class MyHttpClient(http_client.HttpClient):
     # (urllib2.HTTPError or urllib2.URLError in python 2), or it may cause some un-handled errors.
     def urlopen(self):
         # The flowing code is the default implementation, you can see what fields you can use. you can change your implementation here
-        res = urllib2.urlopen(self.request, data=self.data, timeout=self.timeout,
-                              cafile=self.cafile, capath=self.capath,
-                              cadefault=self.cadefault, context=self.context)
+        res = urllib.request.urlopen(self.request, data=self.data, timeout=self.timeout,
+                                     cafile=self.cafile, capath=self.capath,
+                                     cadefault=self.cadefault, context=self.context)
 
         if res.info().get("Content-Encoding") == "gzip":
-            try:
-                # python2
-                f = gzip.GzipFile(fileobj=StringIO(res.read()))
-            except NameError:
-                f = gzip.GzipFile(fileobj=res)
+            f = gzip.GzipFile(fileobj=res)
         else:
             f = res
 
@@ -393,10 +375,6 @@ This logger will first save all the log record to a global queue, and then outpu
 ## Amazon Data Center Support
 
 This component should support deploying in Amazone EC2, it should automatically load metadata from Amazon metadata service. All the metadata keys come from `com.netflix.appinfo.AmazonInfo` in Netflix's java client. BUT for the reason that I have no amazon environment to test, it may not work. If errors occurs, please submit an issue and provide some detail logs, I will try to fix it as far as I can. If it works, a reply in this [issue](https://github.com/keijack/python-eureka-client/issues/33) is wellcomed.
-
-## Known Problems
-
-In python2, please do not set your `app_name`, `instance_id` or so with `UTF-8` ecoding, or it will rasie some Unicode encoding error. 
 
 ## More Infomation
 

@@ -22,11 +22,10 @@ setuptools.setup(
     url="https://github.com/keijack/python-eureka-client",
     packages=setuptools.find_packages(),
     install_requires=[
-        "netifaces"
+        "netifaces",
+        "dnspython"
     ],
     classifiers=[
-        "Programming Language :: Python :: 2.7",
-        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",

@@ -22,40 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-try:
-    import dns.resolver
-    no_dnspython = False
-except (ModuleNotFoundError, NameError):
-    no_dnspython = True
-import subprocess
-
-from py_eureka_client.logger import get_logger
-
-_logger = get_logger("dns_txt_resolver")
-
-
-def _get_txt_dns_record_from_lib(domain):
-    try:
-        records = dns.resolver.resolve(domain, 'TXT')
-    except AttributeError:
-        records = dns.resolver.query(domain, 'TXT')
-    if len(records):
-        return str(records[0]).replace('"', "").split(' ')
-
-
-def _get_txt_dns_record_from_cmd(domain):
-    cmd = ["host", "-t", "TXT", domain]
-    out = subprocess.check_output(cmd)
-    out = str(out.decode("UTF-8"))
-    pre = "%s descriptive text " % domain
-    if not out.startswith(pre):
-        raise subprocess.SubprocessError("Cannot load text record from domain %s" % domain)
-    return out.replace(pre, "").replace("\n", "").replace('"', "").split(' ')
-
+import dns.resolver
 
 def get_txt_dns_record(domain):
-    if no_dnspython:
-        _logger.info("Cannot find dnspython module, try to use host command to resovle domain [%s]" % domain)
-        return _get_txt_dns_record_from_cmd(domain)
-    else:
-        return _get_txt_dns_record_from_lib(domain)
+    records = dns.resolver.resolve(domain, 'TXT')
+    if len(records):
+        return str(records[0]).replace('"', "").split(' ')

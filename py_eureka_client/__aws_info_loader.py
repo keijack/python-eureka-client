@@ -34,7 +34,7 @@ _AWS_METADATA_SERVICE_IP = "169.254.169.254"
 _AWS_METADATA_SERVICE_URL = "http://%s/latest/" % _AWS_METADATA_SERVICE_IP
 
 
-class AmazonInfo(object):
+class AmazonInfo:
 
     def __init__(self):
         self.__can_access = self.__check_connectivity()

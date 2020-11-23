@@ -8,7 +8,9 @@
 
 ## 支持版本
 
-Python 2.7 / 3.6+ (3.5 也应该支持，但未测试)
+Python 3.7+
+
+*从`0.9`开始，不再支持 python 2，如果你需要使用 python 2，请使用 `0.8.8` 版本。*
 
 ## 特点
 
@@ -147,22 +149,6 @@ eureka_client.init(eureka_domain="mydomaintest.netflix.net",
                 instance_port=9090,
                 data_center_name="Amazon")
 ```
-
-*注意：`py-eureka-client`首先会尝试使用 `dnspython` 来解析 DNS，但是 `dnspython` 从 2.0.0 起就不再支持 python2 了，而 `py-eureka-client` 当前还是支持 `python2` 的，因此，`dnspython` 并没有引入到项目工程当中。所有，如果你使用到这项特性，请手动安装 `dnspython` 依赖库。*
-
-*Python 3:*
-
-```shell
-python3 -m pip install dnspython
-```
-
-*python2:*
-
-```shell
-python2 -m pip install dnspython==1.16.0
-```
-
-*如果你没有安装 `dnspytho`，`py-eureka-client` 会尝试 `host` 命令来解析 DNS，`host` 命令默认在许多的 Linux 发行版本中都默认有安装。但如果是在 docker 容器的一些简化系统中，你可能需要手动安装这个命令。*
 
 你可以独立配置 eureka 服务器的协议、简单认证、上下文路径，而不把这些放在 URL中。
 
@@ -402,9 +388,6 @@ logger.set_level("DEBUG")
 
 理论上，这个组件可以正常运行在亚马逊的数据中心。当运行在亚马逊数据中心，会从亚马逊的 metadata 服务中取得相关的元数据并且自动填充到 DataCenterInfo 中，填充的字段信息来源自 Netflix 的 Java 客户端中的 `com.netflix.appinfo.AmazonInfo` 类。**不过**，由于我本人没有亚马逊的相关环境作为测试，所以，在实际的运行当中，可能会发生错误。如果真的发生了错误的话，请提出 ISSUE 并且提供详细的日志，我会尽力支持。如果运行没有问题，如果可以，也欢迎在这个[问题](https://github.com/keijack/python-eureka-client/issues/33)进行回复。
 
-## 已知问题
-
-如果你使用 Python2，那么你的 `app_name`、`instance_id` 等字段请不要使用 Unicode 编码的字符，否则会抛出编码异常。我曾想过做支持，但是需要改的地方还是挺多的，并且 Python2 已经不再被官方支持，所以最终还是决定放弃了，不然代码维护起来是相当的麻烦。
 
 ## 更多信息
 

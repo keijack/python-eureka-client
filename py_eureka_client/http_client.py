@@ -26,16 +26,13 @@ import socket
 import re
 import base64
 import gzip
+import ssl
+from typing import Union
 
-try:
-    import urllib.request as urllib2
-    from urllib.error import HTTPError
-    from urllib.error import URLError
-except ImportError:
-    import urllib2
-    from urllib2 import HTTPError
-    from urllib2 import URLError
-    from StringIO import StringIO
+import urllib.request
+from urllib.error import HTTPError
+from urllib.error import URLError
+
 
 """
 Default encoding
@@ -76,7 +73,7 @@ def parse_url(url):
         raise URLError("url[%s] is not a valid url." % url)
 
 
-class Request(urllib2.Request, object):
+class Request(urllib.request.Request):
 
     def __init__(self, url, data=None, headers={},
                  origin_req_host=None, unverifiable=False,
@@ -87,22 +84,20 @@ class Request(urllib2.Request, object):
         url_obj = parse_url(url)
         url_addr = url_obj["url"]
         url_auth = url_obj["auth"]
-        try:
-            super(Request, self).__init__(url_addr, data=data, headers=headers,
-                                          origin_req_host=origin_req_host, unverifiable=unverifiable,
-                                          method=method)
-        except TypeError:
-            super(Request, self).__init__(url_addr, data=data, headers=headers,
-                                          origin_req_host=origin_req_host, unverifiable=unverifiable)
-            self.get_method = lambda: method if method is not None else "GET"
+
+        super().__init__(url_addr, data=data, headers=headers,
+                         origin_req_host=origin_req_host, unverifiable=unverifiable,
+                         method=method)
+
         if url_auth is not None:
             self.add_header('Authorization', 'Basic %s' % url_auth)
 
 
-class HttpClient(object):
+class HttpClient:
 
-    def __init__(self, request=None, data=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
-                 cafile=None, capath=None, cadefault=False, context=None):
+    def __init__(self, request: Union[str, urllib.request.Request] = None,
+                 data: bytes = None, timeout: float = socket._GLOBAL_DEFAULT_TIMEOUT,
+                 cafile: str = None, capath: str = None, cadefault: bool = False, context: ssl.SSLContext = None):
         self.request = request
         self.data = data
         self.timeout = timeout
@@ -111,17 +106,13 @@ class HttpClient(object):
         self.cadefault = cadefault
         self.context = context
 
-    def urlopen(self):
-        res = urllib2.urlopen(self.request, data=self.data, timeout=self.timeout,
-                              cafile=self.cafile, capath=self.capath,
-                              cadefault=self.cadefault, context=self.context)
+    def urlopen(self) -> str:
+        res = urllib.request.urlopen(self.request, data=self.data, timeout=self.timeout,
+                                     cafile=self.cafile, capath=self.capath,
+                                     cadefault=self.cadefault, context=self.context)
 
         if res.info().get("Content-Encoding") == "gzip":
-            try:
-                # python2
-                f = gzip.GzipFile(fileobj=StringIO(res.read()))
-            except NameError:
-                f = gzip.GzipFile(fileobj=res)
+            f = gzip.GzipFile(fileobj=res)
         else:
             f = res
 
@@ -133,15 +124,15 @@ class HttpClient(object):
 __HTTP_CLIENT_CLASS__ = HttpClient
 
 
-def set_http_client_class(clz):
+def set_http_client_class(clz: HttpClient) -> None:
     assert issubclass(clz, HttpClient)
     global __HTTP_CLIENT_CLASS__
     __HTTP_CLIENT_CLASS__ = clz
 
 
-def load(url, data=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
-         cafile=None, capath=None, cadefault=False, context=None):
-    if isinstance(url, urllib2.Request):
+def load(url, data: bytes = None, timeout: float = socket._GLOBAL_DEFAULT_TIMEOUT,
+         cafile: str = None, capath: str = None, cadefault: bool = False, context: ssl.SSLContext = None):
+    if isinstance(url, urllib.request.Request):
         request = url
     elif isinstance(url, str):
         request = Request(url)

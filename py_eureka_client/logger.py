@@ -54,7 +54,7 @@ class CachingLogger(logging.Logger):
         _msg_cache.put((self, record))
 
 
-def set_level(level):
+def set_level(level: str) -> None:
     global _LOG_LEVEL_
     lv = level.upper()
     if lv in ("DEBUG", "INFO", "WARN", "ERROR"):
@@ -66,20 +66,20 @@ def set_level(level):
             l.setLevel(lv)
 
 
-def add_handler(handler):
+def add_handler(handler: logging.Handler) -> None:
     _handlers.append(handler)
     for l in __cache_loggers.values():
         l.addHandler(handler)
 
 
-def remove_handler(handler):
+def remove_handler(handler: logging.Handler) -> None:
     if handler in _handlers:
         _handlers.remove(handler)
     for l in __cache_loggers.values():
         l.removeHandler(handler)
 
 
-def set_handler(handler):
+def set_handler(handler: logging.Handler) -> None:
     _handlers.clear()
     _handlers.append(handler)
     for l in __cache_loggers.values():
@@ -88,7 +88,7 @@ def set_handler(handler):
         l.addHandler(handler)
 
 
-def get_logger(tag="py-eureka-client"):
+def get_logger(tag: str = "py-eureka-client") -> logging.Logger:
     if tag not in __cache_loggers:
         __cache_loggers[tag] = CachingLogger(tag, _LOG_LEVEL_)
         for hdlr in _handlers:
