@@ -928,12 +928,13 @@ class EurekaClient(object):
         self.__should_discover = should_discover
         self.__prefer_same_zone = prefer_same_zone
         self.__alive = False
+        self.__heartbeat_interval = renewal_interval_in_secs
         self.__heartbeat_timer = Timer(renewal_interval_in_secs, self.__heartbeat)
         self.__heartbeat_timer.daemon = True
         self.__instance_ip = instance_ip
         self.__instance_host = instance_host
         self.__aws_metadata = {}
-       
+
         # For Registery
         if should_register:
             if data_center_name == "Amazon":
@@ -1013,7 +1014,6 @@ class EurekaClient(object):
         if self.__aws_metadata and "local-hostname" in self.__aws_metadata and self.__aws_metadata["local-hostname"]:
             host = self.__aws_metadata["local-hostname"]
         return ip, host
-            
 
     def __load_ec2_metadata_dict(self):
         # instance metadata
@@ -1256,7 +1256,7 @@ class EurekaClient(object):
             if self.__should_discover:
                 _logger.debug("loading services from  eureka server")
                 self.__fetch_delta()
-            time.sleep(self.__instance["leaseInfo"]["renewalIntervalInSecs"])
+            time.sleep(self.__heartbeat_interval)
 
     def __pull_full_registry(self):
         def do_pull(url):  # the actual function body
