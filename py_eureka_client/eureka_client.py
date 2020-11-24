@@ -931,6 +931,7 @@ class EurekaClient:
         self.__should_discover = should_discover
         self.__prefer_same_zone = prefer_same_zone
         self.__alive = False
+        self.__heartbeat_interval = renewal_interval_in_secs
         self.__heartbeat_timer = Timer(renewal_interval_in_secs, self.__heartbeat)
         self.__heartbeat_timer.daemon = True
         self.__instance_ip = instance_ip
@@ -1258,7 +1259,7 @@ class EurekaClient:
             if self.__should_discover:
                 _logger.debug("loading services from  eureka server")
                 self.__fetch_delta()
-            time.sleep(self.__instance["leaseInfo"]["renewalIntervalInSecs"])
+            time.sleep(self.__heartbeat_interval)
 
     def __pull_full_registry(self):
         def do_pull(url):  # the actual function body
