@@ -694,11 +694,11 @@ class EurekaServerConf(object):
         return self.__servers_not_in_zone
 
 
-class EurekaServerConnectionException(Exception):
+class EurekaServerConnectionException(http_client.URLError):
     pass
 
 
-class DiscoverException(Exception):
+class DiscoverException(http_client.URLError):
     pass
 
 
@@ -1409,7 +1409,10 @@ class EurekaClient(object):
         return [item for item in instances if item.instanceId not in ign]
 
     def __get_available_service(self, application_name, ignore_instance_ids=None):
-        app = self.applications.get_application(application_name)
+        apps = self.applications
+        if not apps:
+            raise DiscoverException("Cannot load registry from eureka server, please check your configurations. ")
+        app = apps.get_application(application_name)
         if app is None:
             return None
         up_instances = []
