@@ -10,7 +10,7 @@
 
 Python 3.7+
 
-*从`0.9`开始，不再支持 python 2，如果你需要使用 python 2，请使用 `0.8.8` 版本。*
+*从`0.9`开始，不再支持 python 2，如果你需要使用 python 2，请使用 `0.8.10` 版本。*
 
 ## 特点
 
@@ -313,7 +313,8 @@ inst = up_instances[0]
 
 1. 继承 `py_eureka_client.http_client` 中的 `HttpClient` 类。
 2. 重写该类的 `urlopen` 方法，注意：该方法返回的是响应体的文本。
-3. 将你定义的类设置到`py_eureka_client.http_client` 中。
+3. (可选) 当你的 `urlopen` 方法不是返回 `http.client.HTTPResponse`，你还需要提供一个 `read_response_body` 方法来读取其响应体中的字符串。
+4. 将你定义的类设置到`py_eureka_client.http_client` 中。
 
 ```python
 import py_eureka_client.http_client as http_client
@@ -335,7 +336,18 @@ class MyHttpClient(http_client.HttpClient):
                               cafile=self.cafile, capath=self.capath,
                               cadefault=self.cadefault, context=self.context)
 
-# 3. 将你定义的类设置到`py_eureka_client.http_client` 中。
+    # 3. 可选，提供一个方法读取响应体中的文本内容。
+    def read_response_body(self, res) -> str:
+        if res.info().get("Content-Encoding") == "gzip":
+            f = gzip.GzipFile(fileobj=res)
+        else:
+            f = res
+
+        txt = f.read().decode(_DEFAULT_ENCODING)
+        f.close()
+        return txt
+
+# 4. 将你定义的类设置到`py_eureka_client.http_client` 中。
 http_client.set_http_client_class(MyHttpClient)
 ```
 

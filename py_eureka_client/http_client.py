@@ -112,6 +112,15 @@ class HttpClient:
                                cafile=self.cafile, capath=self.capath,
                                cadefault=self.cadefault, context=self.context)
 
+    def read_response_body(self, res) -> str:
+        if res.info().get("Content-Encoding") == "gzip":
+            f = gzip.GzipFile(fileobj=res)
+        else:
+            f = res
+
+        txt = f.read().decode(_DEFAULT_ENCODING)
+        f.close()
+        return txt
 
 
 __HTTP_CLIENT_CLASS__ = HttpClient
@@ -132,13 +141,8 @@ def load(url, data: bytes = None, timeout: float = socket._GLOBAL_DEFAULT_TIMEOU
     else:
         raise URLError("Unvalid URL")
     request.add_header("Accept-encoding", "gzip")
-    res = __HTTP_CLIENT_CLASS__(request=request, data=data, timeout=timeout,
-                                cafile=cafile, capath=capath, cadefault=cadefault, context=context).urlopen()
-    if res.info().get("Content-Encoding") == "gzip":
-        f = gzip.GzipFile(fileobj=res)
-    else:
-        f = res
-
-    txt = f.read().decode(_DEFAULT_ENCODING)
-    f.close()
+    http_cli = __HTTP_CLIENT_CLASS__(request=request, data=data, timeout=timeout,
+                                cafile=cafile, capath=capath, cadefault=cadefault, context=context)
+    res = http_cli.urlopen()
+    txt = http_cli.read_response_body(res)
     return txt, res

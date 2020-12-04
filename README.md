@@ -10,7 +10,7 @@ This is an eureka client written in python, you can easily intergrate your pytho
 
 Python 3.7+
 
-*From 0.9, python 2 is no longer supported, if you are using python 2, please use  version `0.8.8`.*
+*From 0.9, python 2 is no longer supported, if you are using python 2, please use  version `0.8.10`.*
 
 ## Why choose
 
@@ -305,7 +305,8 @@ To do this, you should:
 
 1. Inherit the `HttpClient` class in `py_eureka_client.http_client`.
 2. Rewrite the `urlopen` method in your class.
-3. Set your class to `py_eureka_client.http_client`. 
+3. (Optional) If your urlopen do not return a `http.client.HTTPResponse`, you should also privide a method to read your response object into text.
+4. Set your class to `py_eureka_client.http_client`. 
 
 ```python
 import py_eureka_client.http_client as http_client
@@ -327,9 +328,19 @@ class MyHttpClient(http_client.HttpClient):
                                      cafile=self.cafile, capath=self.capath,
                                      cadefault=self.cadefault, context=self.context)
 
+    # 3. Optional, provide a `read_response_body` method to read your response object body to string.
+    def read_response_body(self, res) -> str:
+        if res.info().get("Content-Encoding") == "gzip":
+            f = gzip.GzipFile(fileobj=res)
+        else:
+            f = res
+
+        txt = f.read().decode(_DEFAULT_ENCODING)
+        f.close()
+        return txt
         
 
-# 3. Set your class to `py_eureka_client.http_client`. 
+# 4. Set your class to `py_eureka_client.http_client`. 
 http_client.set_http_client_class(MyHttpClient)
 ```
 
