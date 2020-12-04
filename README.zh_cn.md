@@ -213,7 +213,7 @@ except urllib.request.HTTPError as e:
     print(e)
 ```
 
-上述参数中，return_type 可以选择传入`json`，如果传入`json`，则该接口返回一个 `dict` 对象。该参数也可不传入，默认返回为 `str`。
+上述参数中，return_type 可以选择传入`json`，如果传入`json`，则该接口返回一个 `dict` 对象，如果传入`response_object`，那么该方法会返回原始的 HTTPResponse 对象。该参数也可不传入，默认返回的为 `str` 的响应体的内容。
 
 这个方法还接受其他的参数，剩余的参数和 `urllib.request.urlopen`(python2 是 `urllib2.urlopen`) 接口一致。请参考相关的接口或者源代码进行传入。
 
@@ -345,22 +345,9 @@ class MyHttpClient(http_client.HttpClient):
     # (Python 2 则分别是 urllib2.HTTPError 或者 urllib2.URLError) 否则可能会发生未可知之错误。
     def urlopen(self):
         # 以下是默认实现，你可以查看该类有哪一些参数。
-        res = urllib2.urlopen(self.request, data=self.data, timeout=self.timeout,
+        return urllib2.urlopen(self.request, data=self.data, timeout=self.timeout,
                               cafile=self.cafile, capath=self.capath,
                               cadefault=self.cadefault, context=self.context)
-
-        if res.info().get("Content-Encoding") == "gzip":
-            try:
-                # python2
-                f = gzip.GzipFile(fileobj=StringIO(res.read()))
-            except NameError:
-                f = gzip.GzipFile(fileobj=res)
-        else:
-            f = res
-
-        txt = f.read().decode(_DEFAULT_ENCODING)
-        f.close()
-        return txt
 
 # 3. 将你定义的类设置到`py_eureka_client.http_client` 中。
 http_client.set_http_client_class(MyHttpClient)

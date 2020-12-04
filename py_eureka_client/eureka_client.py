@@ -27,18 +27,16 @@ import json
 import re
 import socket
 import time
+import ssl
 import random
 import inspect
 from copy import copy
+from typing import Callable, Dict, List, Union
 import xml.etree.ElementTree as ElementTree
 from threading import Timer
 from threading import RLock
 from threading import Thread
-try:
-    from urllib.parse import quote
-except ImportError:
-    from urllib import quote
-
+from urllib.parse import quote
 
 import py_eureka_client.http_client as http_client
 import py_eureka_client.__netint_utils as netint
@@ -46,43 +44,38 @@ from py_eureka_client.logger import get_logger
 from py_eureka_client.__dns_txt_resolver import get_txt_dns_record
 from py_eureka_client.__aws_info_loader import AmazonInfo
 
-try:
-    long(0)
-except NameError:
-    # python 3 does no longer support long method, use int instead
-    long = int
 
 _logger = get_logger("eureka_client")
 
 """
 Status of instances
 """
-INSTANCE_STATUS_UP = "UP"
-INSTANCE_STATUS_DOWN = "DOWN"
-INSTANCE_STATUS_STARTING = "STARTING"
-INSTANCE_STATUS_OUT_OF_SERVICE = "OUT_OF_SERVICE"
-INSTANCE_STATUS_UNKNOWN = "UNKNOWN"
+INSTANCE_STATUS_UP: str = "UP"
+INSTANCE_STATUS_DOWN: str = "DOWN"
+INSTANCE_STATUS_STARTING: str = "STARTING"
+INSTANCE_STATUS_OUT_OF_SERVICE: str = "OUT_OF_SERVICE"
+INSTANCE_STATUS_UNKNOWN: str = "UNKNOWN"
 
 """
 Action type of instances
 """
-ACTION_TYPE_ADDED = "ADDED"
-ACTION_TYPE_MODIFIED = "MODIFIED"
-ACTION_TYPE_DELETED = "DELETED"
+ACTION_TYPE_ADDED: str = "ADDED"
+ACTION_TYPE_MODIFIED: str = "MODIFIED"
+ACTION_TYPE_DELETED: str = "DELETED"
 
 """ 
 This is for the DiscoveryClient, when this strategy is set, get_service_url will random choose one of the UP instance and return its url
 This is the default strategy
 """
-HA_STRATEGY_RANDOM = 1
+HA_STRATEGY_RANDOM: int = 1
 """
 This is for the DiscoveryClient, when this strategy is set, get_service_url will always return one instance until it is down
 """
-HA_STRATEGY_STICK = 2
+HA_STRATEGY_STICK: int = 2
 """
 This is for the DiscoveryClient, when this strategy is set, get_service_url will always return a new instance if any other instances are up
 """
-HA_STRATEGY_OTHER = 3
+HA_STRATEGY_OTHER: int = 3
 
 """
 The timeout seconds that all http request to the eureka server
@@ -112,115 +105,23 @@ _DEFAUTL_ZONE = "default"
 ### Beans ###
 
 
-class Applications:
-
-    def __init__(self,
-                 apps__hashcode="",
-                 versions__delta="",
-                 applications=None):
-        self.apps__hashcode = apps__hashcode
-        self.versions__delta = versions__delta
-        self.__applications = applications if applications is not None else []
-        self.__application_name_dic = {}
-        self.__app_lock = RLock()
-
-    @property
-    def appsHashcode(self):
-        return self.apps__hashcode
-
-    @property
-    def applications(self):
-        return self.__applications
-
-    @property
-    def versionsDelta(self):
-        return self.versions__delta
-
-    def add_application(self, application):
-        with self.__app_lock:
-            self.__applications.append(application)
-            self.__application_name_dic[application.name] = application
-
-    def get_application(self, app_name=""):
-        with self.__app_lock:
-            aname = app_name.upper()
-            if app_name in self.__application_name_dic:
-                return self.__application_name_dic[aname]
-            else:
-                return Application(name=aname)
-
-
-class Application:
-
-    def __init__(self,
-                 name="",
-                 instances=None):
-        self.name = name
-        if isinstance(instances, list):
-            for ins in instances:
-                self.add_instance(ins)
-        self.__instances_dict = {}
-        self.__inst_lock = RLock()
-
-    @property
-    def instances(self):
-        with self.__inst_lock:
-            return list(self.__instances_dict.values())
-
-    @property
-    def up_instances(self):
-        with self.__inst_lock:
-            return [item for item in self.__instances_dict.values() if item.status == INSTANCE_STATUS_UP]
-
-    def get_instance(self, instance_id):
-        with self.__inst_lock:
-            if instance_id in self.__instances_dict:
-                return self.__instances_dict[instance_id]
-            else:
-                return None
-
-    def add_instance(self, instance):
-        with self.__inst_lock:
-            self.__instances_dict[instance.instanceId] = instance
-
-    def update_instance(self, instance):
-        with self.__inst_lock:
-            _logger.debug("update instance %s" % instance.instanceId)
-            self.__instances_dict[instance.instanceId] = instance
-
-    def remove_instance(self, instance):
-        with self.__inst_lock:
-            if instance.instanceId in self.__instances_dict:
-                del self.__instances_dict[instance.instanceId]
-
-    def up_instances_in_zone(self, zone):
-        with self.__inst_lock:
-            _zone = zone if zone else _DEFAUTL_ZONE
-            return [item for item in self.__instances_dict.values() if item.status == INSTANCE_STATUS_UP and item.zone == _zone]
-
-    def up_instances_not_in_zone(self, zone):
-        with self.__inst_lock:
-            _zone = zone if zone else _DEFAUTL_ZONE
-            return [item for item in self.__instances_dict.values() if item.status == INSTANCE_STATUS_UP and item.zone != _zone]
-
-
 class LeaseInfo:
 
     def __init__(self,
-                 renewalIntervalInSecs=_RENEWAL_INTERVAL_IN_SECS,
-                 durationInSecs=_DURATION_IN_SECS,
-                 registrationTimestamp=0,
-                 lastRenewalTimestamp=0,
-                 renewalTimestamp=0,
-                 evictionTimestamp=0,
-                 serviceUpTimestamp=0):
-        self.renewalIntervalInSecs = renewalIntervalInSecs
-        self.durationInSecs = durationInSecs
-        self.registrationTimestamp = registrationTimestamp
-        self.lastRenewalTimestamp = lastRenewalTimestamp
-        self.renewalTimestamp = renewalTimestamp
-        self.evictionTimestamp = evictionTimestamp
-        self.serviceUpTimestamp = serviceUpTimestamp
+                 renewalIntervalInSecs: int = _RENEWAL_INTERVAL_IN_SECS,
+                 durationInSecs: int = _DURATION_IN_SECS,
+                 registrationTimestamp: int = 0,
+                 lastRenewalTimestamp: int = 0,
+                 renewalTimestamp: int = 0,
+                 evictionTimestamp: int = 0,
+                 serviceUpTimestamp: int = 0):
+        self.renewalIntervalInSecs: int = renewalIntervalInSecs
+        self.durationInSecs: int = durationInSecs
+        self.registrationTimestamp: int = registrationTimestamp
+        self.lastRenewalTimestamp: int = lastRenewalTimestamp
+        self.renewalTimestamp: int = renewalTimestamp
+        self.evictionTimestamp: int = evictionTimestamp
+        self.serviceUpTimestamp: int = serviceUpTimestamp
 
 
 class DataCenterInfo:
@@ -229,18 +130,18 @@ class DataCenterInfo:
                  name=_DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
                  className=_DEFAULT_DATA_CENTER_INFO_CLASS,
                  metadata={}):
-        self.name = name
-        self.className = className
-        self.metadata = metadata if metadata else {}
+        self.name: str = name
+        self.className: str = className
+        self.metadata: Dict = metadata if metadata else {}
 
 
 class PortWrapper:
     def __init__(self, port=0, enabled=False):
-        self.port = port
-        self.enabled = enabled
+        self.port: int = port
+        self.enabled: bool = enabled
 
 
-class Instance(object):
+class Instance:
 
     def __init__(self,
                  instanceId="",
@@ -268,34 +169,34 @@ class Instance(object):
                  lastDirtyTimestamp=0,
                  actionType=ACTION_TYPE_ADDED,  # ADDED, MODIFIED, DELETED
                  asgName=""):
-        self.instanceId = instanceId
-        self.sid = sid
-        self.app = app
-        self.appGroupName = appGroupName
-        self.ipAddr = ipAddr
-        self.port = port
-        self.securePort = securePort
-        self.homePageUrl = homePageUrl
-        self.statusPageUrl = statusPageUrl
-        self.healthCheckUrl = healthCheckUrl
-        self.secureHealthCheckUrl = secureHealthCheckUrl
-        self.vipAddress = vipAddress
-        self.secureVipAddress = secureVipAddress
-        self.countryId = countryId
-        self.dataCenterInfo = dataCenterInfo
-        self.hostName = hostName
-        self.status = status
-        self.overriddenstatus = overriddenstatus
-        self.leaseInfo = leaseInfo
-        self.isCoordinatingDiscoveryServer = isCoordinatingDiscoveryServer
-        self.metadata = metadata if metadata is not None else {}
-        self.lastUpdatedTimestamp = lastUpdatedTimestamp
-        self.lastDirtyTimestamp = lastDirtyTimestamp
-        self.actionType = actionType
-        self.asgName = asgName
+        self.instanceId: str = instanceId
+        self.sid: str = sid
+        self.app: str = app
+        self.appGroupName: str = appGroupName
+        self.ipAddr: str = ipAddr
+        self.port: PortWrapper = port
+        self.securePort: PortWrapper = securePort
+        self.homePageUrl: str = homePageUrl
+        self.statusPageUrl: str = statusPageUrl
+        self.healthCheckUrl: str = healthCheckUrl
+        self.secureHealthCheckUrl: str = secureHealthCheckUrl
+        self.vipAddress: str = vipAddress
+        self.secureVipAddress: str = secureVipAddress
+        self.countryId: str = countryId
+        self.dataCenterInfo: DataCenterInfo = dataCenterInfo
+        self.hostName: str = hostName
+        self.status: str = status
+        self.overriddenstatus: str = overriddenstatus
+        self.leaseInfo: LeaseInfo = leaseInfo
+        self.isCoordinatingDiscoveryServer: bool = isCoordinatingDiscoveryServer
+        self.metadata: Dict = metadata if metadata is not None else {}
+        self.lastUpdatedTimestamp: int = lastUpdatedTimestamp
+        self.lastDirtyTimestamp: int = lastDirtyTimestamp
+        self.actionType: int = actionType
+        self.asgName: int = asgName
 
     @property
-    def zone(self):
+    def zone(self) -> str:
         if self.dataCenterInfo and self.dataCenterInfo.name == "Amazon" \
                 and self.dataCenterInfo.metadata and "availability-zone" in self.dataCenterInfo.metadata:
             return self.dataCenterInfo.metadata["availability-zone"]
@@ -305,9 +206,101 @@ class Instance(object):
             return _DEFAUTL_ZONE
 
 
+class Application:
+
+    def __init__(self,
+                 name="",
+                 instances=None):
+        self.name: str = name
+        if isinstance(instances, list):
+            for ins in instances:
+                self.add_instance(ins)
+        self.__instances_dict = {}
+        self.__inst_lock = RLock()
+
+    @property
+    def instances(self) -> List[Instance]:
+        with self.__inst_lock:
+            return list(self.__instances_dict.values())
+
+    @property
+    def up_instances(self) -> List[Instance]:
+        with self.__inst_lock:
+            return [item for item in self.__instances_dict.values() if item.status == INSTANCE_STATUS_UP]
+
+    def get_instance(self, instance_id: str) -> Instance:
+        with self.__inst_lock:
+            if instance_id in self.__instances_dict:
+                return self.__instances_dict[instance_id]
+            else:
+                return None
+
+    def add_instance(self, instance: Instance) -> None:
+        with self.__inst_lock:
+            self.__instances_dict[instance.instanceId] = instance
+
+    def update_instance(self, instance: Instance) -> None:
+        with self.__inst_lock:
+            _logger.debug("update instance %s" % instance.instanceId)
+            self.__instances_dict[instance.instanceId] = instance
+
+    def remove_instance(self, instance: Instance) -> None:
+        with self.__inst_lock:
+            if instance.instanceId in self.__instances_dict:
+                del self.__instances_dict[instance.instanceId]
+
+    def up_instances_in_zone(self, zone: str) -> List[Instance]:
+        with self.__inst_lock:
+            _zone = zone if zone else _DEFAUTL_ZONE
+            return [item for item in self.__instances_dict.values() if item.status == INSTANCE_STATUS_UP and item.zone == _zone]
+
+    def up_instances_not_in_zone(self, zone: str) -> List[Instance]:
+        with self.__inst_lock:
+            _zone = zone if zone else _DEFAUTL_ZONE
+            return [item for item in self.__instances_dict.values() if item.status == INSTANCE_STATUS_UP and item.zone != _zone]
+
+
+class Applications:
+
+    def __init__(self,
+                 apps__hashcode="",
+                 versions__delta="",
+                 applications=None):
+        self.apps__hashcode: str = apps__hashcode
+        self.versions__delta: str = versions__delta
+        self.__applications = applications if applications is not None else []
+        self.__application_name_dic = {}
+        self.__app_lock = RLock()
+
+    @property
+    def appsHashcode(self) -> str:
+        return self.apps__hashcode
+
+    @property
+    def applications(self) -> List[Application]:
+        return self.__applications
+
+    @property
+    def versionsDelta(self) -> str:
+        return self.versions__delta
+
+    def add_application(self, application: Application) -> None:
+        with self.__app_lock:
+            self.__applications.append(application)
+            self.__application_name_dic[application.name] = application
+
+    def get_application(self, app_name: str = "") -> Application:
+        with self.__app_lock:
+            aname = app_name.upper()
+            if app_name in self.__application_name_dic:
+                return self.__application_name_dic[aname]
+            else:
+                return Application(name=aname)
+
+
 ########################## Basic functions #################################
 ####### Registry functions #########
-def register(eureka_server, instance):
+def register(eureka_server: str, instance: Instance) -> None:
     instance_dic = {
         'instanceId': instance.instanceId,
         'hostName': instance.hostName,
@@ -352,20 +345,25 @@ def register(eureka_server, instance):
     _register(eureka_server, instance_dic)
 
 
-def _register(eureka_server, instance_dic):
+def _register(eureka_server: str, instance_dic: Dict) -> None:
     req = http_client.Request(_format_url(eureka_server) + "apps/%s" % quote(instance_dic["app"]))
     req.add_header('Content-Type', 'application/json')
     req.get_method = lambda: "POST"
-    http_client.load(req, json.dumps({"instance": instance_dic}).encode(_DEFAULT_ENCODING), timeout=_DEFAULT_TIME_OUT)
+    http_client.load(req, json.dumps({"instance": instance_dic}).encode(_DEFAULT_ENCODING), timeout=_DEFAULT_TIME_OUT)[0]
 
 
-def cancel(eureka_server, app_name, instance_id):
+def cancel(eureka_server: str, app_name: str, instance_id: str) -> None:
     req = http_client.Request(_format_url(eureka_server) + "apps/%s/%s" % (quote(app_name), quote(instance_id)))
     req.get_method = lambda: "DELETE"
-    http_client.load(req, timeout=_DEFAULT_TIME_OUT)
+    http_client.load(req, timeout=_DEFAULT_TIME_OUT)[0]
 
 
-def send_heartbeat(eureka_server, app_name, instance_id, last_dirty_timestamp, status=INSTANCE_STATUS_UP, overriddenstatus=""):
+def send_heartbeat(eureka_server: str,
+                   app_name: str,
+                   instance_id: str,
+                   last_dirty_timestamp: int,
+                   status: str = INSTANCE_STATUS_UP,
+                   overriddenstatus: str = "") -> None:
     url = _format_url(eureka_server) + "apps/%s/%s?status=%s&lastDirtyTimestamp=%s" % \
         (quote(app_name), quote(instance_id), status, str(last_dirty_timestamp))
     if overriddenstatus != "":
@@ -373,10 +371,15 @@ def send_heartbeat(eureka_server, app_name, instance_id, last_dirty_timestamp, s
 
     req = http_client.Request(url)
     req.get_method = lambda: "PUT"
-    http_client.load(req, timeout=_DEFAULT_TIME_OUT)
+    http_client.load(req, timeout=_DEFAULT_TIME_OUT)[0]
 
 
-def status_update(eureka_server, app_name, instance_id, last_dirty_timestamp, status=INSTANCE_STATUS_UP, overriddenstatus=""):
+def status_update(eureka_server: str,
+                  app_name: str,
+                  instance_id: str,
+                  last_dirty_timestamp,
+                  status: str = INSTANCE_STATUS_OUT_OF_SERVICE,
+                  overriddenstatus: str = ""):
     url = _format_url(eureka_server) + "apps/%s/%s/status?value=%s&lastDirtyTimestamp=%s" % \
         (quote(app_name), quote(instance_id), status, str(last_dirty_timestamp))
     if overriddenstatus != "":
@@ -384,22 +387,22 @@ def status_update(eureka_server, app_name, instance_id, last_dirty_timestamp, st
 
     req = http_client.Request(url)
     req.get_method = lambda: "PUT"
-    http_client.load(req, timeout=_DEFAULT_TIME_OUT)
+    http_client.load(req, timeout=_DEFAULT_TIME_OUT)[0]
 
 
-def delete_status_override(eureka_server, app_name, instance_id, last_dirty_timestamp):
+def delete_status_override(eureka_server: str, app_name: str, instance_id: str, last_dirty_timestamp: str):
     url = _format_url(eureka_server) + "apps/%s/%s/status?lastDirtyTimestamp=%s" % \
         (quote(app_name), quote(instance_id), str(last_dirty_timestamp))
 
     req = http_client.Request(url)
     req.get_method = lambda: "DELETE"
-    http_client.load(req, timeout=_DEFAULT_TIME_OUT)
+    http_client.load(req, timeout=_DEFAULT_TIME_OUT)[0]
 
 
 ####### Discovory functions ########
 
 
-def get_applications(eureka_server, regions=[]):
+def get_applications(eureka_server: str, regions: List[str] = []) -> Applications:
     return _get_applications_(_format_url(eureka_server) + "apps/", regions)
 
 
@@ -415,7 +418,7 @@ def _get_applications_(url, regions=[]):
     if len(regions) > 0:
         _url = _url + ("&" if "?" in _url else "?") + "regions=" + (",".join(regions))
 
-    txt = http_client.load(_url, timeout=_DEFAULT_TIME_OUT)
+    txt = http_client.load(_url, timeout=_DEFAULT_TIME_OUT)[0]
     return _build_applications(ElementTree.fromstring(txt.encode(_DEFAULT_ENCODING)))
 
 
@@ -494,9 +497,9 @@ def _build_instance(xml_node):
         elif child_node.tag == "metadata":
             instance.metadata = _build_metadata(child_node)
         elif child_node.tag == "lastUpdatedTimestamp":
-            instance.lastUpdatedTimestamp = long(child_node.text)
+            instance.lastUpdatedTimestamp = int(child_node.text)
         elif child_node.tag == "lastDirtyTimestamp":
-            instance.lastDirtyTimestamp = long(child_node.text)
+            instance.lastDirtyTimestamp = int(child_node.text)
         elif child_node.tag == "actionType":
             instance.actionType = child_node.text
         elif child_node.tag == "asgName":
@@ -533,15 +536,15 @@ def _build_lease_info(xml_node):
         elif child_node.tag == "durationInSecs":
             leaseInfo.durationInSecs = int(child_node.text)
         elif child_node.tag == "registrationTimestamp":
-            leaseInfo.registrationTimestamp = long(child_node.text)
+            leaseInfo.registrationTimestamp = int(child_node.text)
         elif child_node.tag == "lastRenewalTimestamp":
-            leaseInfo.lastRenewalTimestamp = long(child_node.text)
+            leaseInfo.lastRenewalTimestamp = int(child_node.text)
         elif child_node.tag == "renewalTimestamp":
-            leaseInfo.renewalTimestamp = long(child_node.text)
+            leaseInfo.renewalTimestamp = int(child_node.text)
         elif child_node.tag == "evictionTimestamp":
-            leaseInfo.evictionTimestamp = long(child_node.text)
+            leaseInfo.evictionTimestamp = int(child_node.text)
         elif child_node.tag == "serviceUpTimestamp":
-            leaseInfo.serviceUpTimestamp = long(child_node.text)
+            leaseInfo.serviceUpTimestamp = int(child_node.text)
 
     return leaseInfo
 
@@ -553,34 +556,34 @@ def _build_port(xml_node):
     return port
 
 
-def get_delta(eureka_server, regions=[]):
+def get_delta(eureka_server: str, regions: List[str] = []) -> Applications:
     return _get_applications_(_format_url(eureka_server) + "apps/delta", regions)
 
 
-def get_vip(eureka_server, vip, regions=[]):
+def get_vip(eureka_server: str, vip: str, regions: List[str] = []) -> Applications:
     return _get_applications_(_format_url(eureka_server) + "vips/" + vip, regions)
 
 
-def get_secure_vip(eureka_server, svip, regions=[]):
+def get_secure_vip(eureka_server: str, svip: str, regions: List[str] = []) -> Applications:
     return _get_applications_(_format_url(eureka_server) + "svips/" + svip, regions)
 
 
-def get_application(eureka_server, app_name):
-    url = _format_url(eureka_server) + "apps/" + app_name
-    txt = http_client.load(url, timeout=_DEFAULT_TIME_OUT)
+def get_application(eureka_server: str, app_name: str) -> Application:
+    url = _format_url(eureka_server) + "apps/" + quote(app_name)
+    txt = http_client.load(url, timeout=_DEFAULT_TIME_OUT)[0]
     return _build_application(ElementTree.fromstring(txt))
 
 
-def get_app_instance(eureka_server, app_name, instance_id):
-    return _get_instance_(_format_url(eureka_server) + "apps/%s/%s" % (app_name, instance_id))
+def get_app_instance(eureka_server: str, app_name: str, instance_id: str) -> Instance:
+    return _get_instance_(_format_url(eureka_server) + "apps/%s/%s" % (quote(app_name), quote(instance_id)))
 
 
-def get_instance(eureka_server, instance_id):
-    return _get_instance_(_format_url(eureka_server) + "instances/" + instance_id)
+def get_instance(eureka_server: str, instance_id: str) -> Instance:
+    return _get_instance_(_format_url(eureka_server) + "instances/" + quote(instance_id))
 
 
 def _get_instance_(url):
-    txt = http_client.load(url, timeout=_DEFAULT_TIME_OUT)
+    txt = http_client.load(url, timeout=_DEFAULT_TIME_OUT)[0]
     return _build_instance(ElementTree.fromstring(txt))
 
 
@@ -604,7 +607,7 @@ class EurekaServerConf(object):
                  region="",
                  zone=""):
         self.__servers = {}
-        self.region = region
+        self.region: str = region
         self.__zone = zone
         self.__eureka_availability_zones = eureka_availability_zones
         _zone = zone if zone else _DEFAUTL_ZONE
@@ -631,7 +634,7 @@ class EurekaServerConf(object):
             del self.__servers_not_in_zone[_zone]
 
     @property
-    def zone(self):
+    def zone(self) -> str:
         if self.__zone:
             return self.__zone
         elif self.__eureka_availability_zones:
@@ -679,18 +682,18 @@ class EurekaServerConf(object):
         return "%s://%s%s%s" % (prtl, basic_auth, url, ctx)
 
     @property
-    def servers(self):
+    def servers(self) -> Dict:
         return self.__servers
 
     @property
-    def servers_in_zone(self):
+    def servers_in_zone(self) -> List[str]:
         if self.zone in self.servers:
             return self.servers[self.zone]
         else:
             return []
 
     @property
-    def servers_not_in_zone(self):
+    def servers_not_in_zone(self) -> List[str]:
         return self.__servers_not_in_zone
 
 
@@ -702,7 +705,7 @@ class DiscoverException(http_client.URLError):
     pass
 
 
-class EurekaClient(object):
+class EurekaClient:
     """
     Example:
 
@@ -872,39 +875,39 @@ class EurekaClient(object):
     """
 
     def __init__(self,
-                 eureka_server=_DEFAULT_EUREKA_SERVER_URL,
-                 eureka_domain="",
-                 region="",
-                 zone="",
-                 eureka_availability_zones={},
-                 eureka_protocol="http",
-                 eureka_basic_auth_user="",
-                 eureka_basic_auth_password="",
-                 eureka_context="/eureka",
-                 prefer_same_zone=True,
-                 should_register=True,
-                 should_discover=True,
-                 app_name="",
-                 instance_id="",
-                 instance_host="",
-                 instance_ip="",
-                 instance_port=_DEFAULT_INSTNACE_PORT,
-                 instance_unsecure_port_enabled=True,
-                 instance_secure_port=_DEFAULT_INSTNACE_SECURE_PORT,
-                 instance_secure_port_enabled=False,
-                 data_center_name=_DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
-                 renewal_interval_in_secs=_RENEWAL_INTERVAL_IN_SECS,
-                 duration_in_secs=_DURATION_IN_SECS,
-                 home_page_url="",
-                 status_page_url="",
-                 health_check_url="",
-                 secure_health_check_url="",
-                 vip_adr="",
-                 secure_vip_addr="",
-                 is_coordinating_discovery_server=False,
-                 metadata={},
-                 remote_regions=[],
-                 ha_strategy=HA_STRATEGY_RANDOM):
+                 eureka_server: str = _DEFAULT_EUREKA_SERVER_URL,
+                 eureka_domain: str = "",
+                 region: str = "",
+                 zone: str = "",
+                 eureka_availability_zones: Dict[str, str] = {},
+                 eureka_protocol: str = "http",
+                 eureka_basic_auth_user: str = "",
+                 eureka_basic_auth_password: str = "",
+                 eureka_context: str = "/eureka",
+                 prefer_same_zone: bool = True,
+                 should_register: bool = True,
+                 should_discover: bool = True,
+                 app_name: str = "",
+                 instance_id: str = "",
+                 instance_host: str = "",
+                 instance_ip: str = "",
+                 instance_port: int = _DEFAULT_INSTNACE_PORT,
+                 instance_unsecure_port_enabled: bool = True,
+                 instance_secure_port: int = _DEFAULT_INSTNACE_SECURE_PORT,
+                 instance_secure_port_enabled: bool = False,
+                 data_center_name: str = _DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
+                 renewal_interval_in_secs: int = _RENEWAL_INTERVAL_IN_SECS,
+                 duration_in_secs: int = _DURATION_IN_SECS,
+                 home_page_url: str = "",
+                 status_page_url: str = "",
+                 health_check_url: str = "",
+                 secure_health_check_url: str = "",
+                 vip_adr: str = "",
+                 secure_vip_addr: str = "",
+                 is_coordinating_discovery_server: bool = False,
+                 metadata: Dict = {},
+                 remote_regions: List[str] = [],
+                 ha_strategy: int = HA_STRATEGY_RANDOM):
         assert app_name is not None and app_name != "" if should_register else True, "application name must be specified."
         assert instance_port > 0 if should_register else True, "port is unvalid"
         assert isinstance(metadata, dict), "metadata must be dict"
@@ -1042,19 +1045,19 @@ class EurekaClient(object):
         return metadata
 
     @property
-    def should_register(self):
+    def should_register(self) -> bool:
         return self.__should_register
 
     @property
-    def should_discover(self):
+    def should_discover(self) -> bool:
         return self.__should_discover
 
     @property
-    def zone(self):
+    def zone(self) -> str:
         return self.__eureka_server_conf.zone
 
     @property
-    def applications(self):
+    def applications(self) -> Applications:
         if not self.should_discover:
             raise DiscoverException("should_discover set to False, no registry is pulled, cannot find any applications.")
         with self.__application_mth_lock:
@@ -1183,7 +1186,7 @@ class EurekaClient(object):
         s.close()
         return ip
 
-    def register(self, status=INSTANCE_STATUS_UP, overriddenstatus=INSTANCE_STATUS_UNKNOWN):
+    def register(self, status: str = INSTANCE_STATUS_UP, overriddenstatus: str = INSTANCE_STATUS_UNKNOWN) -> None:
         self.__instance["status"] = status
         self.__instance["overriddenstatus"] = overriddenstatus
         self.__instance["lastUpdatedTimestamp"] = str(_current_time_millis())
@@ -1199,7 +1202,7 @@ class EurekaClient(object):
             _logger.debug("register successfully!")
             self.__alive = True
 
-    def cancel(self):
+    def cancel(self) -> None:
         try:
             def do_cancel(url):
                 cancel(url, self.__instance["app"], self.__instance["instanceId"])
@@ -1209,7 +1212,7 @@ class EurekaClient(object):
         else:
             self.__alive = False
 
-    def send_heartbeat(self, overridden_status=""):
+    def send_heartbeat(self, overridden_status: str = "") -> None:
         if not self.__alive:
             self.register()
             return
@@ -1225,7 +1228,7 @@ class EurekaClient(object):
             _logger.warn("Cannot send heartbeat to server, try to register. ", exc_info=True)
             self.register()
 
-    def status_update(self, new_status):
+    def status_update(self, new_status: str) -> None:
         self.__instance["status"] = new_status
         try:
             def do_status_update(url):
@@ -1235,7 +1238,7 @@ class EurekaClient(object):
         except:
             _logger.warn("update status error!", exc_info=True)
 
-    def delete_status_override(self):
+    def delete_status_override(self) -> None:
         self.__connect_to_eureka_server(lambda url: delete_status_override(
             url, self.__instance["app"], self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"]))
 
@@ -1323,7 +1326,14 @@ class EurekaClient(object):
             app_hash = app_hash + "%s_%d_" % (item[0], item[1])
         return app_hash
 
-    def walk_nodes_async(self, app_name="", service="", prefer_ip=False, prefer_https=False, walker=None, on_success=None, on_error=None):
+    def walk_nodes_async(self,
+                         app_name: str = "",
+                         service: str = "",
+                         prefer_ip: bool = False,
+                         prefer_https: bool = False,
+                         walker: Callable = None,
+                         on_success: Callable = None,
+                         on_error: Callable = None) -> None:
         def async_thread_target():
             try:
                 res = self.walk_nodes(app_name=app_name, service=service, prefer_ip=prefer_ip, prefer_https=prefer_https, walker=walker)
@@ -1337,7 +1347,12 @@ class EurekaClient(object):
         async_thread.daemon = True
         async_thread.start()
 
-    def walk_nodes(self, app_name="", service="", prefer_ip=False, prefer_https=False, walker=None):
+    def walk_nodes(self,
+                   app_name: str = "",
+                   service: str = "",
+                   prefer_ip: bool = False,
+                   prefer_https: bool = False,
+                   walker: Callable = None) -> Union[str, dict]:
         assert app_name is not None and app_name != "", "application_name should not be null"
         assert inspect.isfunction(walker) or inspect.ismethod(walker), "walker must be a method or function"
         error_nodes = []
@@ -1360,12 +1375,12 @@ class EurekaClient(object):
 
         raise http_client.URLError("Try all up instances in registry, but all fail")
 
-    def do_service_async(self, app_name="", service="", return_type="string",
-                         prefer_ip=False, prefer_https=False,
-                         on_success=None, on_error=None,
-                         method="GET", headers=None,
-                         data=None, timeout=_DEFAULT_TIME_OUT,
-                         cafile=None, capath=None, cadefault=False, context=None):
+    def do_service_async(self, app_name: str = "", service: str = "", return_type: str = "string",
+                         prefer_ip: bool = False, prefer_https: bool = False,
+                         on_success: Callable = None, on_error: Callable = None,
+                         method: str = "GET", headers: Dict[str, str] = None,
+                         data: bytes = None, timeout: float = _DEFAULT_TIME_OUT,
+                         cafile: str = None, capath: str = None, cadefault: bool = False, context: ssl.SSLContext = None) -> None:
         def async_thread_target():
             try:
                 res = self.do_service(app_name=app_name,
@@ -1385,11 +1400,11 @@ class EurekaClient(object):
         async_thread.daemon = True
         async_thread.start()
 
-    def do_service(self, app_name="", service="", return_type="string",
-                   prefer_ip=False, prefer_https=False,
-                   method="GET", headers=None,
-                   data=None, timeout=_DEFAULT_TIME_OUT,
-                   cafile=None, capath=None, cadefault=False, context=None):
+    def do_service(self, app_name: str = "", service: str = "", return_type: str = "string",
+                   prefer_ip: bool = False, prefer_https: bool = False,
+                   method: str = "GET", headers: Dict[str, str] = None,
+                   data: bytes = None, timeout: float = _DEFAULT_TIME_OUT,
+                   cafile: str = None, capath: str = None, cadefault: bool = False, context: ssl.SSLContext = None) -> Union[str, Dict]:
         def walk_using_urllib(url):
             req = http_client.Request(url)
             req.get_method = lambda: method
@@ -1397,9 +1412,11 @@ class EurekaClient(object):
             for k, v in heads.items():
                 req.add_header(k, v)
 
-            res_txt = http_client.load(req, data=data, timeout=timeout, cafile=cafile, capath=capath, cadefault=cadefault, context=context)
+            res_txt, res = http_client.load(req, data=data, timeout=timeout, cafile=cafile, capath=capath, cadefault=cadefault, context=context)
             if return_type.lower() in ("json", "dict", "dictionary"):
                 return json.loads(res_txt)
+            elif return_type.lower() == "response_object":
+                return res
             else:
                 return res_txt
         return self.walk_nodes(app_name, service, prefer_ip, prefer_https, walk_using_urllib)
@@ -1498,14 +1515,14 @@ class EurekaClient(object):
     def __start_discover(self):
         self.__pull_full_registry()
 
-    def start(self):
+    def start(self) -> None:
         if self.should_register:
             self.__start_register()
         if self.should_discover:
             self.__start_discover()
         self.__heartbeat_timer.start()
 
-    def stop(self):
+    def stop(self) -> None:
         if self.__heartbeat_timer.isAlive():
             self.__heartbeat_timer.cancel()
         if self.__should_register:
@@ -1517,38 +1534,39 @@ __cache_clients = {}
 __cache_clients_lock = RLock()
 
 
-def init(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
-         eureka_domain="",
-         region="",
-         zone="",
-         eureka_availability_zones={},
-         eureka_protocol="http",
-         eureka_basic_auth_user="",
-         eureka_basic_auth_password="",
-         eureka_context="eureka/v2",
-         should_register=True,
-         should_discover=True,
-         app_name="",
-         instance_id="",
-         instance_host="",
-         instance_ip="",
-         instance_port=_DEFAULT_INSTNACE_PORT,
-         instance_unsecure_port_enabled=True,
-         instance_secure_port=_DEFAULT_INSTNACE_SECURE_PORT,
-         instance_secure_port_enabled=False,
-         data_center_name=_DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
-         renewal_interval_in_secs=_RENEWAL_INTERVAL_IN_SECS,
-         duration_in_secs=_DURATION_IN_SECS,
-         home_page_url="",
-         status_page_url="",
-         health_check_url="",
-         secure_health_check_url="",
-         vip_adr="",
-         secure_vip_addr="",
-         is_coordinating_discovery_server=False,
-         metadata={},
-         remote_regions=[],
-         ha_strategy=HA_STRATEGY_RANDOM):
+def init(eureka_server: str = _DEFAULT_EUREKA_SERVER_URL,
+         eureka_domain: str = "",
+         region: str = "",
+         zone: str = "",
+         eureka_availability_zones: Dict[str, str] = {},
+         eureka_protocol: str = "http",
+         eureka_basic_auth_user: str = "",
+         eureka_basic_auth_password: str = "",
+         eureka_context: str = "/eureka",
+         prefer_same_zone: bool = True,
+         should_register: bool = True,
+         should_discover: bool = True,
+         app_name: str = "",
+         instance_id: str = "",
+         instance_host: str = "",
+         instance_ip: str = "",
+         instance_port: int = _DEFAULT_INSTNACE_PORT,
+         instance_unsecure_port_enabled: bool = True,
+         instance_secure_port: int = _DEFAULT_INSTNACE_SECURE_PORT,
+         instance_secure_port_enabled: bool = False,
+         data_center_name: str = _DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
+         renewal_interval_in_secs: int = _RENEWAL_INTERVAL_IN_SECS,
+         duration_in_secs: int = _DURATION_IN_SECS,
+         home_page_url: str = "",
+         status_page_url: str = "",
+         health_check_url: str = "",
+         secure_health_check_url: str = "",
+         vip_adr: str = "",
+         secure_vip_addr: str = "",
+         is_coordinating_discovery_server: bool = False,
+         metadata: Dict = {},
+         remote_regions: List[str] = [],
+         ha_strategy: int = HA_STRATEGY_RANDOM) -> EurekaClient:
     """
     Initialize an EurekaClient object and put it to cache, you can use a set of functions to do the service.
 
@@ -1571,6 +1589,7 @@ def init(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
                               eureka_basic_auth_user=eureka_basic_auth_user,
                               eureka_basic_auth_password=eureka_basic_auth_password,
                               eureka_context=eureka_context,
+                              prefer_same_zone=prefer_same_zone,
                               should_register=should_register,
                               should_discover=should_discover,
                               app_name=app_name,
@@ -1599,68 +1618,7 @@ def init(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
         return client
 
 
-def init_registry_client(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
-                         app_name="",
-                         instance_id="",
-                         instance_host="",
-                         instance_ip="",
-                         instance_port=_DEFAULT_INSTNACE_PORT,
-                         instance_unsecure_port_enabled=True,
-                         instance_secure_port=_DEFAULT_INSTNACE_SECURE_PORT,
-                         instance_secure_port_enabled=False,
-                         data_center_name=_DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
-                         renewal_interval_in_secs=_RENEWAL_INTERVAL_IN_SECS,
-                         duration_in_secs=_DURATION_IN_SECS,
-                         home_page_url="",
-                         status_page_url="",
-                         health_check_url="",
-                         secure_health_check_url="",
-                         vip_adr="",
-                         secure_vip_addr="",
-                         is_coordinating_discovery_server=False,
-                         metadata={}):
-    """
-    Deprecated， use `init` instead
-    """
-    return init(eureka_server=eureka_server,
-                should_discover=False,
-                app_name=app_name,
-                instance_id=instance_id,
-                instance_host=instance_host,
-                instance_ip=instance_ip,
-                instance_port=instance_port,
-                instance_unsecure_port_enabled=instance_unsecure_port_enabled,
-                instance_secure_port=instance_secure_port,
-                instance_secure_port_enabled=instance_secure_port_enabled,
-                data_center_name=data_center_name,
-                renewal_interval_in_secs=renewal_interval_in_secs,
-                duration_in_secs=duration_in_secs,
-                home_page_url=home_page_url,
-                status_page_url=status_page_url,
-                health_check_url=health_check_url,
-                secure_health_check_url=secure_health_check_url,
-                vip_adr=vip_adr,
-                secure_vip_addr=secure_vip_addr,
-                is_coordinating_discovery_server=is_coordinating_discovery_server,
-                metadata=metadata)
-
-
-def init_discovery_client(eureka_server=_DEFAULT_EUREKA_SERVER_URL,
-                          regions=[],  # Deprecated
-                          renewal_interval_in_secs=_RENEWAL_INTERVAL_IN_SECS,
-                          ha_strategy=HA_STRATEGY_RANDOM):
-    """
-    Deprecated， use `init` instead
-    """
-    return init(eureka_server=eureka_server,
-                should_register=False,
-                remote_regions=regions,
-                renewal_interval_in_secs=renewal_interval_in_secs,
-                ha_strategy=ha_strategy)
-
-
-def get_client():
-    # type () -> EurekaClient
+def get_client() -> EurekaClient:
     with __cache_clients_lock:
         if __cache_key in __cache_clients:
             return __cache_clients[__cache_key]
@@ -1668,20 +1626,14 @@ def get_client():
             return None
 
 
-def get_registry_client():
+def walk_nodes_async(app_name: str = "",
+                     service: str = "",
+                     prefer_ip: bool = False,
+                     prefer_https: bool = False,
+                     walker: Callable = None,
+                     on_success: Callable = None,
+                     on_error: Callable = None) -> None:
     cli = get_client()
-    if cli.should_register:
-        return cli
-
-
-def get_discovery_client():
-    cli = get_client()
-    if cli.should_discover:
-        return cli
-
-
-def walk_nodes_async(app_name="", service="", prefer_ip=False, prefer_https=False, walker=None, on_success=None, on_error=None):
-    cli = get_discovery_client()
     if cli is None:
         raise Exception("Discovery Client has not initialized. ")
     cli.walk_nodes_async(app_name=app_name, service=service,
@@ -1689,21 +1641,25 @@ def walk_nodes_async(app_name="", service="", prefer_ip=False, prefer_https=Fals
                          walker=walker, on_success=on_success, on_error=on_error)
 
 
-def walk_nodes(app_name="", service="", prefer_ip=False, prefer_https=False, walker=None):
-    cli = get_discovery_client()
+def walk_nodes(app_name: str = "",
+               service: str = "",
+               prefer_ip: bool = False,
+               prefer_https: bool = False,
+               walker: Callable = None) -> Union[str, dict]:
+    cli = get_client()
     if cli is None:
         raise Exception("Discovery Client has not initialized. ")
     return cli.walk_nodes(app_name=app_name, service=service,
                           prefer_ip=prefer_ip, prefer_https=prefer_https, walker=walker)
 
 
-def do_service_async(app_name="", service="", return_type="string",
-                     prefer_ip=False, prefer_https=False,
-                     on_success=None, on_error=None,
-                     method="GET", headers=None,
-                     data=None, timeout=_DEFAULT_TIME_OUT,
-                     cafile=None, capath=None, cadefault=False, context=None):
-    cli = get_discovery_client()
+def do_service_async(app_name: str = "", service: str = "", return_type: str = "string",
+                     prefer_ip: bool = False, prefer_https: bool = False,
+                     on_success: Callable = None, on_error: Callable = None,
+                     method: str = "GET", headers: Dict[str, str] = None,
+                     data: bytes = None, timeout: float = _DEFAULT_TIME_OUT,
+                     cafile: str = None, capath: str = None, cadefault: bool = False, context: ssl.SSLContext = None) -> None:
+    cli = get_client()
     if cli is None:
         raise Exception("Discovery Client has not initialized. ")
     cli.do_service_async(app_name=app_name, service=service, return_type=return_type,
@@ -1715,12 +1671,12 @@ def do_service_async(app_name="", service="", return_type="string",
                          cadefault=cadefault, context=context)
 
 
-def do_service(app_name="", service="", return_type="string",
-               prefer_ip=False, prefer_https=False,
-               method="GET", headers=None,
-               data=None, timeout=_DEFAULT_TIME_OUT,
-               cafile=None, capath=None, cadefault=False, context=None):
-    cli = get_discovery_client()
+def do_service(app_name: str = "", service: str = "", return_type: str = "string",
+               prefer_ip: bool = False, prefer_https: bool = False,
+               method: str = "GET", headers: Dict[str, str] = None,
+               data: bytes = None, timeout: float = _DEFAULT_TIME_OUT,
+               cafile: str = None, capath: str = None, cadefault: bool = False, context: ssl.SSLContext = None) -> Union[str, Dict]:
+    cli = get_client()
     if cli is None:
         raise Exception("Discovery Client has not initialized. ")
     return cli.do_service(app_name=app_name, service=service, return_type=return_type,
@@ -1731,7 +1687,7 @@ def do_service(app_name="", service="", return_type="string",
                           cadefault=cadefault, context=context)
 
 
-def stop():
+def stop() -> None:
     client = get_client()
     if client is not None:
         client.stop()
