@@ -1352,7 +1352,7 @@ class EurekaClient:
                    service: str = "",
                    prefer_ip: bool = False,
                    prefer_https: bool = False,
-                   walker: Callable = None) -> Union[str, dict]:
+                   walker: Callable = None) -> Union[str, Dict, http_client.HTTPResponse]:
         assert app_name is not None and app_name != "", "application_name should not be null"
         assert inspect.isfunction(walker) or inspect.ismethod(walker), "walker must be a method or function"
         error_nodes = []
@@ -1404,7 +1404,7 @@ class EurekaClient:
                    prefer_ip: bool = False, prefer_https: bool = False,
                    method: str = "GET", headers: Dict[str, str] = None,
                    data: bytes = None, timeout: float = _DEFAULT_TIME_OUT,
-                   cafile: str = None, capath: str = None, cadefault: bool = False, context: ssl.SSLContext = None) -> Union[str, Dict]:
+                   cafile: str = None, capath: str = None, cadefault: bool = False, context: ssl.SSLContext = None) -> Union[str, Dict, http_client.HTTPResponse]:
         def walk_using_urllib(url):
             req = http_client.Request(url)
             req.get_method = lambda: method

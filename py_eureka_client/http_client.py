@@ -30,6 +30,7 @@ import ssl
 from typing import Union
 
 import urllib.request
+from http.client import HTTPResponse
 from urllib.error import HTTPError
 from urllib.error import URLError
 
