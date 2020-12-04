@@ -187,7 +187,7 @@ except urllib.request.HTTPError as e:
     print(e)
 ```
 
-`do_service` function also recieve a `return_type` keyword parameter, which when "json" was passed, the result will be a `dict` type object. And other parameters are follow the `urllib.request.urlopen` (`urllib2.urlopen` in python2) method, including `data`, etc. Please read the relative document for more information.
+`do_service` function also recieve a `return_type` keyword parameter, which when `json` was passed, the result will be a `dict` type object whereas `response_object` is pass, the original HTTPResponse object will be return. And other parameters are follow the `urllib.request.urlopen` (`urllib2.urlopen` in python2) method, including `data`, etc. Please read the relative document for more information.
 
 You can also use its `async` version:
 
@@ -270,7 +270,7 @@ There are several HA strategies when using discovery client. They are:
 * HA_STRATEGY_STICK, use one node until it goes down.
 * HA_STRATEGY_OTHER, always use a different node from the last time.
 
-In your `init` function or `init_discovery_client`, you can specify one of the above strategies:
+In your `init` function, you can specify one of the above strategies:
 
 ```python
 import py_eureka_client.eureka_client as eureka_client
@@ -323,18 +323,11 @@ class MyHttpClient(http_client.HttpClient):
     # (urllib2.HTTPError or urllib2.URLError in python 2), or it may cause some un-handled errors.
     def urlopen(self):
         # The flowing code is the default implementation, you can see what fields you can use. you can change your implementation here
-        res = urllib.request.urlopen(self.request, data=self.data, timeout=self.timeout,
+        return urllib.request.urlopen(self.request, data=self.data, timeout=self.timeout,
                                      cafile=self.cafile, capath=self.capath,
                                      cadefault=self.cadefault, context=self.context)
 
-        if res.info().get("Content-Encoding") == "gzip":
-            f = gzip.GzipFile(fileobj=res)
-        else:
-            f = res
-
-        txt = f.read().decode(_DEFAULT_ENCODING)
-        f.close()
-        return txt
+        
 
 # 3. Set your class to `py_eureka_client.http_client`. 
 http_client.set_http_client_class(MyHttpClient)

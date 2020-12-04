@@ -349,13 +349,13 @@ def _register(eureka_server: str, instance_dic: Dict) -> None:
     req = http_client.Request(_format_url(eureka_server) + "apps/%s" % quote(instance_dic["app"]))
     req.add_header('Content-Type', 'application/json')
     req.get_method = lambda: "POST"
-    http_client.load(req, json.dumps({"instance": instance_dic}).encode(_DEFAULT_ENCODING), timeout=_DEFAULT_TIME_OUT)
+    http_client.load(req, json.dumps({"instance": instance_dic}).encode(_DEFAULT_ENCODING), timeout=_DEFAULT_TIME_OUT)[0]
 
 
 def cancel(eureka_server: str, app_name: str, instance_id: str) -> None:
     req = http_client.Request(_format_url(eureka_server) + "apps/%s/%s" % (quote(app_name), quote(instance_id)))
     req.get_method = lambda: "DELETE"
-    http_client.load(req, timeout=_DEFAULT_TIME_OUT)
+    http_client.load(req, timeout=_DEFAULT_TIME_OUT)[0]
 
 
 def send_heartbeat(eureka_server: str,
@@ -371,7 +371,7 @@ def send_heartbeat(eureka_server: str,
 
     req = http_client.Request(url)
     req.get_method = lambda: "PUT"
-    http_client.load(req, timeout=_DEFAULT_TIME_OUT)
+    http_client.load(req, timeout=_DEFAULT_TIME_OUT)[0]
 
 
 def status_update(eureka_server: str,
@@ -387,7 +387,7 @@ def status_update(eureka_server: str,
 
     req = http_client.Request(url)
     req.get_method = lambda: "PUT"
-    http_client.load(req, timeout=_DEFAULT_TIME_OUT)
+    http_client.load(req, timeout=_DEFAULT_TIME_OUT)[0]
 
 
 def delete_status_override(eureka_server: str, app_name: str, instance_id: str, last_dirty_timestamp: str):
@@ -396,7 +396,7 @@ def delete_status_override(eureka_server: str, app_name: str, instance_id: str, 
 
     req = http_client.Request(url)
     req.get_method = lambda: "DELETE"
-    http_client.load(req, timeout=_DEFAULT_TIME_OUT)
+    http_client.load(req, timeout=_DEFAULT_TIME_OUT)[0]
 
 
 ####### Discovory functions ########
@@ -418,7 +418,7 @@ def _get_applications_(url, regions=[]):
     if len(regions) > 0:
         _url = _url + ("&" if "?" in _url else "?") + "regions=" + (",".join(regions))
 
-    txt = http_client.load(_url, timeout=_DEFAULT_TIME_OUT)
+    txt = http_client.load(_url, timeout=_DEFAULT_TIME_OUT)[0]
     return _build_applications(ElementTree.fromstring(txt.encode(_DEFAULT_ENCODING)))
 
 
@@ -570,7 +570,7 @@ def get_secure_vip(eureka_server: str, svip: str, regions: List[str] = []) -> Ap
 
 def get_application(eureka_server: str, app_name: str) -> Application:
     url = _format_url(eureka_server) + "apps/" + quote(app_name)
-    txt = http_client.load(url, timeout=_DEFAULT_TIME_OUT)
+    txt = http_client.load(url, timeout=_DEFAULT_TIME_OUT)[0]
     return _build_application(ElementTree.fromstring(txt))
 
 
@@ -583,7 +583,7 @@ def get_instance(eureka_server: str, instance_id: str) -> Instance:
 
 
 def _get_instance_(url):
-    txt = http_client.load(url, timeout=_DEFAULT_TIME_OUT)
+    txt = http_client.load(url, timeout=_DEFAULT_TIME_OUT)[0]
     return _build_instance(ElementTree.fromstring(txt))
 
 
@@ -1412,9 +1412,11 @@ class EurekaClient:
             for k, v in heads.items():
                 req.add_header(k, v)
 
-            res_txt = http_client.load(req, data=data, timeout=timeout, cafile=cafile, capath=capath, cadefault=cadefault, context=context)
+            res_txt, res = http_client.load(req, data=data, timeout=timeout, cafile=cafile, capath=capath, cadefault=cadefault, context=context)
             if return_type.lower() in ("json", "dict", "dictionary"):
                 return json.loads(res_txt)
+            elif return_type.lower() == "response_object":
+                return res
             else:
                 return res_txt
         return self.walk_nodes(app_name, service, prefer_ip, prefer_https, walk_using_urllib)

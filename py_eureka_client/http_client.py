@@ -106,19 +106,12 @@ class HttpClient:
         self.cadefault = cadefault
         self.context = context
 
-    def urlopen(self) -> str:
-        res = urllib.request.urlopen(self.request, data=self.data, timeout=self.timeout,
-                                     cafile=self.cafile, capath=self.capath,
-                                     cadefault=self.cadefault, context=self.context)
 
-        if res.info().get("Content-Encoding") == "gzip":
-            f = gzip.GzipFile(fileobj=res)
-        else:
-            f = res
+    def urlopen(self):
+        return urllib.request.urlopen(self.request, data=self.data, timeout=self.timeout,
+                               cafile=self.cafile, capath=self.capath,
+                               cadefault=self.cadefault, context=self.context)
 
-        txt = f.read().decode(_DEFAULT_ENCODING)
-        f.close()
-        return txt
 
 
 __HTTP_CLIENT_CLASS__ = HttpClient
@@ -139,5 +132,13 @@ def load(url, data: bytes = None, timeout: float = socket._GLOBAL_DEFAULT_TIMEOU
     else:
         raise URLError("Unvalid URL")
     request.add_header("Accept-encoding", "gzip")
-    return __HTTP_CLIENT_CLASS__(request=request, data=data, timeout=timeout,
-                                 cafile=cafile, capath=capath, cadefault=cadefault, context=context).urlopen()
+    res = __HTTP_CLIENT_CLASS__(request=request, data=data, timeout=timeout,
+                                cafile=cafile, capath=capath, cadefault=cadefault, context=context).urlopen()
+    if res.info().get("Content-Encoding") == "gzip":
+        f = gzip.GzipFile(fileobj=res)
+    else:
+        f = res
+
+    txt = f.read().decode(_DEFAULT_ENCODING)
+    f.close()
+    return txt, res
