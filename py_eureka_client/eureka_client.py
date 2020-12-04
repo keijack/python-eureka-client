@@ -1645,7 +1645,7 @@ def walk_nodes(app_name: str = "",
                service: str = "",
                prefer_ip: bool = False,
                prefer_https: bool = False,
-               walker: Callable = None) -> Union[str, dict]:
+               walker: Callable = None) -> Union[str, Dict, http_client.HTTPResponse]:
     cli = get_client()
     if cli is None:
         raise Exception("Discovery Client has not initialized. ")
@@ -1675,7 +1675,7 @@ def do_service(app_name: str = "", service: str = "", return_type: str = "string
                prefer_ip: bool = False, prefer_https: bool = False,
                method: str = "GET", headers: Dict[str, str] = None,
                data: bytes = None, timeout: float = _DEFAULT_TIME_OUT,
-               cafile: str = None, capath: str = None, cadefault: bool = False, context: ssl.SSLContext = None) -> Union[str, Dict]:
+               cafile: str = None, capath: str = None, cadefault: bool = False, context: ssl.SSLContext = None) -> Union[str, Dict, http_client.HTTPResponse]:
     cli = get_client()
     if cli is None:
         raise Exception("Discovery Client has not initialized. ")
