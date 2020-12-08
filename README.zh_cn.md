@@ -358,7 +358,7 @@ http_client.set_http_client_class(MyHttpClient)
 默认情况下，日志会输出到控制台，你创建自己的 Logging Handler 来将日志输出到别处，例如一个滚动文件中：
 
 ```python
-import simple_http_server.logger as logger
+import py_eureka_client.logger as logger
 import logging
 
 _formatter = logging.Formatter(fmt='[%(asctime)s]-[%(name)s]-%(levelname)-4s: %(message)s')

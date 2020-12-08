@@ -351,7 +351,7 @@ You can find an example in this [issue](https://github.com/keijack/python-eureka
 The default logger is try to write logs to the screen, you can specify the logger handler to write it to a file.
 
 ```python
-import simple_http_server.logger as logger
+import py_eureka_client.logger as logger
 import logging
 
 _formatter = logging.Formatter(fmt='[%(asctime)s]-[%(name)s]-%(levelname)-4s: %(message)s')
