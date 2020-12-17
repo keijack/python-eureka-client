@@ -1379,7 +1379,7 @@ class EurekaClient:
                          prefer_ip: bool = False, prefer_https: bool = False,
                          on_success: Callable = None, on_error: Callable = None,
                          method: str = "GET", headers: Dict[str, str] = None,
-                         data: bytes = None, timeout: float = _DEFAULT_TIME_OUT,
+                         data: Union[bytes, str, Dict] = None, timeout: float = _DEFAULT_TIME_OUT,
                          cafile: str = None, capath: str = None, cadefault: bool = False, context: ssl.SSLContext = None) -> None:
         def async_thread_target():
             try:
@@ -1403,8 +1403,15 @@ class EurekaClient:
     def do_service(self, app_name: str = "", service: str = "", return_type: str = "string",
                    prefer_ip: bool = False, prefer_https: bool = False,
                    method: str = "GET", headers: Dict[str, str] = None,
-                   data: bytes = None, timeout: float = _DEFAULT_TIME_OUT,
+                   data: Union[bytes, str, Dict] = None, timeout: float = _DEFAULT_TIME_OUT,
                    cafile: str = None, capath: str = None, cadefault: bool = False, context: ssl.SSLContext = None) -> Union[str, Dict, http_client.HTTPResponse]:
+        if data and isinstance(data, dict):
+            _data = json.dumps(data).encode()
+        elif data and isinstance(data, str):
+            _data = data.encode()
+        else:
+            _data = data
+
         def walk_using_urllib(url):
             req = http_client.Request(url)
             req.get_method = lambda: method
@@ -1412,7 +1419,7 @@ class EurekaClient:
             for k, v in heads.items():
                 req.add_header(k, v)
 
-            res_txt, res = http_client.load(req, data=data, timeout=timeout, cafile=cafile, capath=capath, cadefault=cadefault, context=context)
+            res_txt, res = http_client.load(req, data=_data, timeout=timeout, cafile=cafile, capath=capath, cadefault=cadefault, context=context)
             if return_type.lower() in ("json", "dict", "dictionary"):
                 return json.loads(res_txt)
             elif return_type.lower() == "response_object":
@@ -1657,7 +1664,7 @@ def do_service_async(app_name: str = "", service: str = "", return_type: str = "
                      prefer_ip: bool = False, prefer_https: bool = False,
                      on_success: Callable = None, on_error: Callable = None,
                      method: str = "GET", headers: Dict[str, str] = None,
-                     data: bytes = None, timeout: float = _DEFAULT_TIME_OUT,
+                     data: Union[bytes, str, Dict] = None, timeout: float = _DEFAULT_TIME_OUT,
                      cafile: str = None, capath: str = None, cadefault: bool = False, context: ssl.SSLContext = None) -> None:
     cli = get_client()
     if cli is None:
@@ -1674,7 +1681,7 @@ def do_service_async(app_name: str = "", service: str = "", return_type: str = "
 def do_service(app_name: str = "", service: str = "", return_type: str = "string",
                prefer_ip: bool = False, prefer_https: bool = False,
                method: str = "GET", headers: Dict[str, str] = None,
-               data: bytes = None, timeout: float = _DEFAULT_TIME_OUT,
+               data: Union[bytes, str, Dict] = None, timeout: float = _DEFAULT_TIME_OUT,
                cafile: str = None, capath: str = None, cadefault: bool = False, context: ssl.SSLContext = None) -> Union[str, Dict, http_client.HTTPResponse]:
     cli = get_client()
     if cli is None:
