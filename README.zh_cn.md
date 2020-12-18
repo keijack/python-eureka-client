@@ -106,8 +106,6 @@ eureka_client.init(eureka_server="http://your-eureka-server-peer1,http://your-eu
                                 instance_port=your_rest_server_port)
 ```
 
-*请注意，如果你将 python 组件和 eureka 服务器部署在一起，计算出来的 ip 会是 `127.0.0.1`，因此在这种情况下，为了保证其他组件能够访问你的组件，请必须指定`instance_host`或者`instance_ip`字段。*
-
 如果你有多个 `zone`，你可以通过参数 `eureka_availability_zones` 来进行配置。
 
 ```python
