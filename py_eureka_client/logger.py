@@ -60,7 +60,7 @@ def set_level(level: str) -> None:
     if lv in ("DEBUG", "INFO", "WARN", "ERROR"):
         _handler.setLevel(lv)
         _logger_ = get_logger("Logger")
-        _logger_.info("global logger set to %s" % lv)
+        _logger_.info(f"global logger set to {lv}")
         _LOG_LEVEL_ = lv
         for l in __cache_loggers.values():
             l.setLevel(lv)

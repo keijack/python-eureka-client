@@ -58,7 +58,7 @@ def parse_url(url):
         addr = url
         if m.group(2) is not None:
             addr = addr.replace(m.group(2), "")
-            ori_auth = ("%s:%s" % (m.group(3), m.group(4))).encode()
+            ori_auth = f"{m.group(3)}:{m.group(4)}".encode()
             auth_str = base64.standard_b64encode(ori_auth).decode()
         else:
             auth_str = None
@@ -71,7 +71,7 @@ def parse_url(url):
             "port": int(m.group(7)) if m.group(7) is not None else None
         }
     else:
-        raise URLError("url[%s] is not a valid url." % url)
+        raise URLError(f"url[{url}] is not a valid url." )
 
 
 class Request(urllib.request.Request):
@@ -91,7 +91,7 @@ class Request(urllib.request.Request):
                          method=method)
 
         if url_auth is not None:
-            self.add_header('Authorization', 'Basic %s' % url_auth)
+            self.add_header('Authorization', f'Basic {url_auth}')
 
 
 class HttpClient:
@@ -107,11 +107,10 @@ class HttpClient:
         self.cadefault = cadefault
         self.context = context
 
-
     def urlopen(self):
         return urllib.request.urlopen(self.request, data=self.data, timeout=self.timeout,
-                               cafile=self.cafile, capath=self.capath,
-                               cadefault=self.cadefault, context=self.context)
+                                      cafile=self.cafile, capath=self.capath,
+                                      cadefault=self.cadefault, context=self.context)
 
     def read_response_body(self, res) -> str:
         if res.info().get("Content-Encoding") == "gzip":
@@ -143,7 +142,7 @@ def load(url, data: bytes = None, timeout: float = socket._GLOBAL_DEFAULT_TIMEOU
         raise URLError("Unvalid URL")
     request.add_header("Accept-encoding", "gzip")
     http_cli = __HTTP_CLIENT_CLASS__(request=request, data=data, timeout=timeout,
-                                cafile=cafile, capath=capath, cadefault=cadefault, context=context)
+                                     cafile=cafile, capath=capath, cadefault=cadefault, context=context)
     res = http_cli.urlopen()
     txt = http_cli.read_response_body(res)
     return txt, res

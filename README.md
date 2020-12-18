@@ -10,7 +10,7 @@ This is an eureka client written in python, you can easily intergrate your pytho
 
 Python 3.7+
 
-*From 0.9, python 2 is no longer supported, if you are using python 2, please use  version `0.8.10`.*
+*From `0.9.0`, python 2 is no longer supported, if you are using python 2, please use  version `0.8.10`.*
 
 ## Why choose
 

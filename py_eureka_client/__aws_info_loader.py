@@ -31,7 +31,7 @@ _logger = get_logger("aws_info_loader")
 
 _CONNECTIVITY_TEST_TIMES = 5
 _AWS_METADATA_SERVICE_IP = "169.254.169.254"
-_AWS_METADATA_SERVICE_URL = "http://%s/latest/" % _AWS_METADATA_SERVICE_IP
+_AWS_METADATA_SERVICE_URL = f"http://{_AWS_METADATA_SERVICE_IP}/latest/"
 
 
 class AmazonInfo:
@@ -48,27 +48,27 @@ class AmazonInfo:
                 return True
             except socket.error:
                 idx = i + 1
-                _logger.debug("Try amazon metadata services connectivity fail, retry (%d/%d)" % (idx, _CONNECTIVITY_TEST_TIMES))
+                _logger.debug(f"Try amazon metadata services connectivity fail, retry ({idx}/{_CONNECTIVITY_TEST_TIMES})")
                 time.sleep(1)
-        _logger.warn("Cannot connect to amazon metadata services in address [%s]" % _AWS_METADATA_SERVICE_IP)
+        _logger.warn(f"Cannot connect to amazon metadata services in address [{_AWS_METADATA_SERVICE_IP}]")
         return False
 
     def get_ec2_metadata(self, meta_path, default_value=""):
         if not self.__can_access:
-            _logger.warn("Cannot connect to amazon metadata services in address [%s], return default value. " % _AWS_METADATA_SERVICE_IP)
+            _logger.warn(f"Cannot connect to amazon metadata services in address [{_AWS_METADATA_SERVICE_IP}], return default value. ")
             return default_value
         try:
-            return http_client.load(_AWS_METADATA_SERVICE_URL + "meta-data/" + meta_path)
+            return http_client.load(f"{_AWS_METADATA_SERVICE_URL}meta-data/{meta_path}")
         except Exception:
-            _logger.exception("error when loading metadata from aws %s" % meta_path)
+            _logger.exception(f"error when loading metadata from aws {meta_path}")
             return default_value
 
     def get_instance_identity_document(self, default_value={}):
         if not self.__can_access:
-            _logger.warn("Cannot connect to amazon metadata services in address [%s], return default value. " % _AWS_METADATA_SERVICE_IP)
+            _logger.warn(f"Cannot connect to amazon metadata services in address [{_AWS_METADATA_SERVICE_IP}], return default value. ")
             return default_value
         try:
-            doc = http_client.load(_AWS_METADATA_SERVICE_URL + "dynamic/instance-identity/document")
+            doc = http_client.load(f"{_AWS_METADATA_SERVICE_URL}dynamic/instance-identity/document")
             return json.loads(doc)
         except Exception:
             _logger.exception("error when loading dynamic instance identity document from aws")

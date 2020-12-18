@@ -63,7 +63,7 @@ ACTION_TYPE_ADDED: str = "ADDED"
 ACTION_TYPE_MODIFIED: str = "MODIFIED"
 ACTION_TYPE_DELETED: str = "DELETED"
 
-""" 
+"""
 This is for the DiscoveryClient, when this strategy is set, get_service_url will random choose one of the UP instance and return its url
 This is the default strategy
 """
@@ -241,7 +241,7 @@ class Application:
 
     def update_instance(self, instance: Instance) -> None:
         with self.__inst_lock:
-            _logger.debug("update instance %s" % instance.instanceId)
+            _logger.debug(f"update instance {instance.instanceId}")
             self.__instances_dict[instance.instanceId] = instance
 
     def remove_instance(self, instance: Instance) -> None:
@@ -346,14 +346,14 @@ def register(eureka_server: str, instance: Instance) -> None:
 
 
 def _register(eureka_server: str, instance_dic: Dict) -> None:
-    req = http_client.Request(_format_url(eureka_server) + "apps/%s" % quote(instance_dic["app"]))
+    req = http_client.Request(f"{_format_url(eureka_server)}apps/{quote(instance_dic['app'])}")
     req.add_header('Content-Type', 'application/json')
     req.get_method = lambda: "POST"
     http_client.load(req, json.dumps({"instance": instance_dic}).encode(_DEFAULT_ENCODING), timeout=_DEFAULT_TIME_OUT)[0]
 
 
 def cancel(eureka_server: str, app_name: str, instance_id: str) -> None:
-    req = http_client.Request(_format_url(eureka_server) + "apps/%s/%s" % (quote(app_name), quote(instance_id)))
+    req = http_client.Request(f"{_format_url(eureka_server)}apps/{quote(app_name)}/{quote(instance_id)}")
     req.get_method = lambda: "DELETE"
     http_client.load(req, timeout=_DEFAULT_TIME_OUT)[0]
 
@@ -364,10 +364,9 @@ def send_heartbeat(eureka_server: str,
                    last_dirty_timestamp: int,
                    status: str = INSTANCE_STATUS_UP,
                    overriddenstatus: str = "") -> None:
-    url = _format_url(eureka_server) + "apps/%s/%s?status=%s&lastDirtyTimestamp=%s" % \
-        (quote(app_name), quote(instance_id), status, str(last_dirty_timestamp))
+    url = f"{_format_url(eureka_server)}apps/{quote(app_name)}/{quote(instance_id)}?status={status}&lastDirtyTimestamp={last_dirty_timestamp}"
     if overriddenstatus != "":
-        url += "&overriddenstatus=" + overriddenstatus
+        url += f"&overriddenstatus={overriddenstatus}"
 
     req = http_client.Request(url)
     req.get_method = lambda: "PUT"
@@ -380,10 +379,9 @@ def status_update(eureka_server: str,
                   last_dirty_timestamp,
                   status: str = INSTANCE_STATUS_OUT_OF_SERVICE,
                   overriddenstatus: str = ""):
-    url = _format_url(eureka_server) + "apps/%s/%s/status?value=%s&lastDirtyTimestamp=%s" % \
-        (quote(app_name), quote(instance_id), status, str(last_dirty_timestamp))
+    url = f"{_format_url(eureka_server)}apps/{quote(app_name)}/{quote(instance_id)}/status?value={status}&lastDirtyTimestamp={last_dirty_timestamp}"
     if overriddenstatus != "":
-        url += "&overriddenstatus=" + overriddenstatus
+        url += f"&overriddenstatus={overriddenstatus}"
 
     req = http_client.Request(url)
     req.get_method = lambda: "PUT"
@@ -391,8 +389,7 @@ def status_update(eureka_server: str,
 
 
 def delete_status_override(eureka_server: str, app_name: str, instance_id: str, last_dirty_timestamp: str):
-    url = _format_url(eureka_server) + "apps/%s/%s/status?lastDirtyTimestamp=%s" % \
-        (quote(app_name), quote(instance_id), str(last_dirty_timestamp))
+    url = f"{_format_url(eureka_server)}apps/{quote(app_name)}/{quote(instance_id)}/status?lastDirtyTimestamp={last_dirty_timestamp}"
 
     req = http_client.Request(url)
     req.get_method = lambda: "DELETE"
@@ -403,7 +400,7 @@ def delete_status_override(eureka_server: str, app_name: str, instance_id: str, 
 
 
 def get_applications(eureka_server: str, regions: List[str] = []) -> Applications:
-    return _get_applications_(_format_url(eureka_server) + "apps/", regions)
+    return _get_applications_(f"{_format_url(eureka_server)}apps/", regions)
 
 
 def _format_url(url):
@@ -557,29 +554,29 @@ def _build_port(xml_node):
 
 
 def get_delta(eureka_server: str, regions: List[str] = []) -> Applications:
-    return _get_applications_(_format_url(eureka_server) + "apps/delta", regions)
+    return _get_applications_(f"{_format_url(eureka_server)}apps/delta", regions)
 
 
 def get_vip(eureka_server: str, vip: str, regions: List[str] = []) -> Applications:
-    return _get_applications_(_format_url(eureka_server) + "vips/" + vip, regions)
+    return _get_applications_(f"{_format_url(eureka_server)}vips/{vip}", regions)
 
 
 def get_secure_vip(eureka_server: str, svip: str, regions: List[str] = []) -> Applications:
-    return _get_applications_(_format_url(eureka_server) + "svips/" + svip, regions)
+    return _get_applications_(f"{_format_url(eureka_server)}svips/{svip}", regions)
 
 
 def get_application(eureka_server: str, app_name: str) -> Application:
-    url = _format_url(eureka_server) + "apps/" + quote(app_name)
+    url = f"{_format_url(eureka_server)}apps/{quote(app_name)}"
     txt = http_client.load(url, timeout=_DEFAULT_TIME_OUT)[0]
     return _build_application(ElementTree.fromstring(txt))
 
 
 def get_app_instance(eureka_server: str, app_name: str, instance_id: str) -> Instance:
-    return _get_instance_(_format_url(eureka_server) + "apps/%s/%s" % (quote(app_name), quote(instance_id)))
+    return _get_instance_(f"{_format_url(eureka_server)}apps/{quote(app_name)}/{quote(instance_id)}")
 
 
 def get_instance(eureka_server: str, instance_id: str) -> Instance:
-    return _get_instance_(_format_url(eureka_server) + "instances/" + quote(instance_id))
+    return _get_instance_(f"{_format_url(eureka_server)}instances/{quote(instance_id)}")
 
 
 def _get_instance_(url):
@@ -612,10 +609,10 @@ class EurekaServerConf(object):
         self.__eureka_availability_zones = eureka_availability_zones
         _zone = zone if zone else _DEFAUTL_ZONE
         if eureka_domain:
-            zone_urls = get_txt_dns_record("txt.%s.%s" % (region, eureka_domain))
+            zone_urls = get_txt_dns_record(f"txt.{region}.{eureka_domain}")
             for zone_url in zone_urls:
                 zone_name = zone_url.split(".")[0]
-                eureka_urls = get_txt_dns_record("txt.%s" % zone_url)
+                eureka_urls = get_txt_dns_record(f"txt.{zone_url}")
                 self.__servers[zone_name] = [self._format_url(eureka_url.strip(), eureka_protocol, eureka_basic_auth_user,
                                                               eureka_basic_auth_password, eureka_context) for eureka_url in eureka_urls]
         elif eureka_availability_zones:
@@ -669,7 +666,7 @@ class EurekaServerConf(object):
         basic_auth = ""
         if user:
             if password:
-                basic_auth = user + ":" + password
+                basic_auth = f"{user}:{password}"
             else:
                 basic_auth = user
             basic_auth += "@"
@@ -679,7 +676,7 @@ class EurekaServerConf(object):
         else:
             ctx = eureka_context if eureka_context.startswith('/') else "/" + eureka_context
 
-        return "%s://%s%s%s" % (prtl, basic_auth, url, ctx)
+        return f"{prtl}://{basic_auth}{url}{ctx}"
 
     @property
     def servers(self) -> Dict:
@@ -911,8 +908,8 @@ class EurekaClient:
         assert app_name is not None and app_name != "" if should_register else True, "application name must be specified."
         assert instance_port > 0 if should_register else True, "port is unvalid"
         assert isinstance(metadata, dict), "metadata must be dict"
-        assert ha_strategy in [HA_STRATEGY_RANDOM, HA_STRATEGY_STICK,
-                               HA_STRATEGY_OTHER] if should_discover else True, "do not support strategy %d " % ha_strategy
+        assert ha_strategy in (HA_STRATEGY_RANDOM, HA_STRATEGY_STICK,
+                               HA_STRATEGY_OTHER) if should_discover else True, f"do not support strategy {ha_strategy}"
 
         self.__net_lock = RLock()
         self.__eureka_server_conf = EurekaServerConf(
@@ -959,8 +956,8 @@ class EurekaClient:
             if zone:
                 mdata["zone"] = zone
             mdata.update(metadata)
-            ins_id = instance_id if instance_id != "" else "%s:%s:%d" % (self.__instance_ip, app_name.lower(), instance_port)
-            _logger.debug("register instance using id [#%s]" % ins_id)
+            ins_id = instance_id if instance_id != "" else f"{self.__instance_ip}:{app_name.lower()}:{instance_port}"
+            _logger.debug(f"register instance using id [#{ins_id}]")
             self.__instance = {
                 'instanceId': ins_id,
                 'hostName': self.__instance_host,
@@ -1023,7 +1020,7 @@ class EurekaClient:
         amazon_info = AmazonInfo()
         mac = amazon_info.get_ec2_metadata('mac')
         if mac:
-            vpc_id = amazon_info.get_ec2_metadata('network/interfaces/macs/%s/vpc-id' % mac)
+            vpc_id = amazon_info.get_ec2_metadata(f'network/interfaces/macs/{mac}/vpc-id')
         else:
             vpc_id = ""
         metadata = {
@@ -1070,15 +1067,15 @@ class EurekaClient:
         invalid_keys = []
         for z, url in self.__cache_eureka_url.items():
             try:
-                _logger.debug("Try to do %s in zone[%s] using cached url %s. " % (fun.__name__, z, url))
+                _logger.debug(f"Try to do {fun.__name__} in zone[{z}] using cached url {url}. ")
                 fun(url)
             except (http_client.HTTPError, http_client.URLError):
-                _logger.warn("Eureka server [%s] is down, use next url to try." % url, exc_info=True)
+                _logger.warn(f"Eureka server [{url}] is down, use next url to try.", exc_info=True)
                 invalid_keys.append(z)
             else:
                 ok = True
         if invalid_keys:
-            _logger.debug("Invalid keys::%s will be removed from cache." % str(invalid_keys))
+            _logger.debug(f"Invalid keys::{invalid_keys} will be removed from cache.")
             for z in invalid_keys:
                 del self.__cache_eureka_url[z]
         if not ok:
@@ -1092,7 +1089,7 @@ class EurekaClient:
             try:
                 self.__try_eureka_servers_in_list(fun, urls, zone)
             except EurekaServerConnectionException:
-                _logger.warn("try eureka servers in zone[%s] error!" % zone, exc_info=True)
+                _logger.warn(f"try eureka servers in zone[{zone}] error!", exc_info=True)
             else:
                 return
         raise EurekaServerConnectionException("All eureka servers in all zone are down!")
@@ -1102,7 +1099,7 @@ class EurekaClient:
             try:
                 self.__try_eureka_servers_in_list(fun, urls, zone)
             except EurekaServerConnectionException:
-                _logger.warn("try eureka servers in zone[%s] error!" % zone, exc_info=True)
+                _logger.warn(f"try eureka servers in zone[{zone}] error!", exc_info=True)
             else:
                 return
         raise EurekaServerConnectionException("All eureka servers in all zone are down!")
@@ -1123,10 +1120,10 @@ class EurekaClient:
             for url in eureka_servers:
                 url = url.strip()
                 try:
-                    _logger.debug("try to do %s in zone[%s] using url %s. " % (fun.__name__, _zone, url))
+                    _logger.debug(f"try to do {fun.__name__} in zone[{_zone}] using url {url}. ")
                     fun(url)
                 except (http_client.HTTPError, http_client.URLError):
-                    _logger.warn("Eureka server [%s] is down, use next url to try." % url, exc_info=True)
+                    _logger.warn(f"Eureka server [{url}] is down, use next url to try.", exc_info=True)
                 else:
                     ok = True
                     self.__cache_eureka_url[_zone] = url
@@ -1135,7 +1132,7 @@ class EurekaClient:
             if not ok:
                 if _zone in self.__cache_eureka_url:
                     del self.__cache_eureka_url[_zone]
-                raise EurekaServerConnectionException("All eureka servers in zone[%s] are down!" % _zone)
+                raise EurekaServerConnectionException(f"All eureka servers in zone[{_zone}] are down!")
 
     def __connect_to_eureka_server(self, fun):
         if self.__cache_eureka_url:
@@ -1152,11 +1149,11 @@ class EurekaClient:
             if url.startswith('http'):
                 _url = url
             elif url.startswith('/'):
-                _url = 'http://%s:%d%s' % (host, port, url)
+                _url = f'http://{host}:{port}{url}'
             else:
-                _url = 'http://%s:%d/%s' % (host, port, url)
+                _url = f'http://{host}:{port}/{url}'
         else:
-            _url = 'http://%s:%d/%s' % (host, port, defalut_ctx)
+            _url = f'http://{host}:{port}/{defalut_ctx}'
         return _url
 
     @staticmethod
@@ -1276,7 +1273,7 @@ class EurekaClient:
                 self.__pull_full_registry()
                 return
             delta = get_delta(url, self.__remote_regions)
-            _logger.debug("delta got: v.%s::%s" % (delta.versionsDelta, delta.appsHashcode))
+            _logger.debug(f"delta got: v.{delta.versionsDelta}::{delta.appsHashcode}")
             if self.__delta is not None \
                     and delta.versionsDelta == self.__delta.versionsDelta \
                     and delta.appsHashcode == self.__delta.appsHashcode:
@@ -1292,14 +1289,14 @@ class EurekaClient:
 
     def __is_hash_match(self):
         app_hash = self.__get_applications_hash()
-        _logger.debug("check hash, local[%s], remote[%s]" % (app_hash, self.__delta.appsHashcode))
+        _logger.debug(f"check hash, local[{app_hash}], remote[{self.__delta.appsHashcode}]")
         return app_hash == self.__delta.appsHashcode
 
     def __merge_delta(self, delta):
-        _logger.debug("merge delta...length of application got from delta::%d" % len(delta.applications))
+        _logger.debug(f"merge delta...length of application got from delta::{len(delta.applications)}")
         for application in delta.applications:
             for instance in application.instances:
-                _logger.debug("instance [%s] has %s" % (instance.instanceId, instance.actionType))
+                _logger.debug(f"instance [{instance.instanceId}] has {instance.actionType}")
                 if instance.actionType in (ACTION_TYPE_ADDED, ACTION_TYPE_MODIFIED):
                     existingApp = self.applications.get_application(application.name)
                     if existingApp is None:
@@ -1323,7 +1320,7 @@ class EurekaClient:
 
         sorted_app_status_count = sorted(app_status_count.items(), key=lambda item: item[0])
         for item in sorted_app_status_count:
-            app_hash = app_hash + "%s_%d_" % (item[0], item[1])
+            app_hash = f"{app_hash}{item[0]}_{item[1]}_"
         return app_hash
 
     def walk_nodes_async(self,
@@ -1369,7 +1366,7 @@ class EurekaClient:
                 _logger.debug("do service with url::" + url)
                 return walker(url)
             except (http_client.HTTPError, http_client.URLError):
-                _logger.warn("do service %s in node [%s] error, use next node." % (service, node.instanceId))
+                _logger.warn(f"do service {service} in node [{node.instanceId}] error, use next node.")
                 error_nodes.append(node.instanceId)
                 node = self.__get_available_service(app_name, error_nodes)
 
@@ -1445,8 +1442,8 @@ class EurekaClient:
             up_instances = self.__get_service_not_in_ignore_list(ups_same_zone, ignore_instance_ids)
             if not up_instances:
                 ups_not_same_zone = app.up_instances_not_in_zone(self.zone)
-                _logger.debug("app[%s]'s up instances not in same zone are all down, using the one that's not in the same zone: %s" %
-                              (application_name, str([ins.instanceId for ins in ups_not_same_zone])))
+                _logger.debug(
+                    f"app[{application_name}]'s up instances not in same zone are all down, using the one that's not in the same zone: {[ins.instanceId for ins in ups_not_same_zone]}")
                 up_instances = self.__get_service_not_in_ignore_list(ups_not_same_zone, ignore_instance_ids)
         else:
             up_instances = self.__get_service_not_in_ignore_list(app.up_instances, ignore_instance_ids)
@@ -1517,7 +1514,7 @@ class EurekaClient:
 
         host = instance.ipAddr if prefer_ip else instance.hostName
 
-        return "%s://%s:%d/" % (schema, host, port)
+        return f"{schema}://{host}:{port}/"
 
     def __start_discover(self):
         self.__pull_full_registry()
@@ -1705,5 +1702,5 @@ def _cleanup_before_exist():
     if len(__cache_clients) > 0:
         _logger.debug("cleaning up clients")
         for k, cli in __cache_clients.items():
-            _logger.debug("try to stop cache client [%s] this will also unregister this client from the eureka server" % k)
+            _logger.debug(f"try to stop cache client [{k}] this will also unregister this client from the eureka server")
             cli.stop()
