@@ -156,7 +156,7 @@ eureka_client.init(eureka_server="your-eureka-server-peer1,your-eureka-server-pe
 
 *About the instance `IP` and `hostname`*:
 
-If you are using a `Amazon` data center, `py-eureka-client` will try to use `local-ipv4` and `local-hostname` get from Amazon metadata service. In other cases, `py-eureka-client` will use the fist non-loopback ip address and hostname from your net interface. 
+If you are using a `Amazon` data center, `py-eureka-client` will try to use `local-ipv4` and `local-hostname` get from Amazon metadata service. In other cases, `py-eureka-client` will use the first non-loopback ip address and hostname from your net interface. 
 
 You can also specify both these tow field or just one of them explicitly:
 
