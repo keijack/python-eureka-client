@@ -22,6 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 import socket
+from typing import Tuple
 import netifaces
 import ipaddress
 from py_eureka_client.logger import get_logger
@@ -36,6 +37,7 @@ def get_host_by_ip(ip):
         _logger.warn("Error when getting host by ip", exc_info=True)
         return ip
 
+
 def get_ip_by_host(host):
     try:
         return socket.gethostbyname(host)
@@ -43,45 +45,30 @@ def get_ip_by_host(host):
         _logger.warn("Error when getting ip by host", exc_info=True)
         return host
 
-def get_ip_and_host_by_network(network):
-    if network:
-        if_list = netifaces.interfaces()
-        ip = ""
-        host = ""
-        try:
-            for if_name in if_list:
-                ifaddr = netifaces.ifaddresses(if_name)
-                if 2 in ifaddr:
-                    _ip = ifaddr[2][0]["addr"]
-                    if ipaddress.ip_address(_ip) in ipaddress.ip_network(network):
-                        ip = _ip
-                        host = get_host_by_ip(ip)
-                        break
-        except:
-            _logger.warn("Error when getting ip by network", exc_info=True)
 
-        if ip:
-            return ip, host
-    else:
-        _logger.warn("No network defined")
-
-    return "", ""
-
-def get_ip_and_host():
+def get_first_non_loopback_ip(network: str = "") -> str:
     if_list = netifaces.interfaces()
     ip = ""
-    host = ""
     for if_name in if_list:
         ifaddr = netifaces.ifaddresses(if_name)
         if 2 in ifaddr:
             _ip = ifaddr[2][0]["addr"]
-            if _ip != "127.0.0.1":
+            if network:
+                if ipaddress.ip_address(_ip) in ipaddress.ip_network(network):
+                    ip = _ip
+                    break
+            elif _ip != "127.0.0.1":
                 ip = _ip
-                host = get_host_by_ip(ip)
                 break
+    return ip
 
+
+def get_ip_and_host(network: str = "") -> Tuple[str, str]:
+    ip = get_first_non_loopback_ip(network=network)
     if not ip:
         host = socket.gethostname()
         ip = socket.gethostbyname(host)
+    else:
+        host = get_host_by_ip(ip)
 
     return ip, host

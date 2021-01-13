@@ -172,9 +172,16 @@ eureka_client.init(eureka_server="your-eureka-server-peer1,your-eureka-server-pe
                 instance_port=9090)
 ```
 
-If you are running your application in a docker-container you might have more than one interfaces attached. In this case you can specify a network to be used to get the container's ip and host.    
+In some case you might have more than one interfaces attached, for example, you are running your application in a docker-container. In this case you can specify a network to be used to get the container's ip and host. 
+
 ```python
-import py_eureka_client.__netint_utils
+import py_eureka_client.netint_utils as netint_utils
+
+ip, host = netint_utils.get_ip_and_host("192.168.10.0/24")
+
+# you can get the ip only
+netint_utils.get_first_non_loopback_ip("192.168.10.0/24")
+host = "my-py-component.mydomian.com"
 
 eureka_client.init(eureka_server="your-eureka-server-peer1,your-eureka-server-peer2",
                 eureka_protocol="https",
@@ -182,8 +189,8 @@ eureka_client.init(eureka_server="your-eureka-server-peer1,your-eureka-server-pe
                 eureka_basic_auth_password="kjauthpass",
                 eureka_context="/eureka/v2",
                 app_name="python_module_1", 
-                instance_ip=__netint_utils.get_ip_and_host_by_network('192.168.1.0/16'),
-                instance_host="my-py-component.mydomian.com",
+                instance_ip=ip,
+                instance_host=host,
                 instance_port=9090)
 ```
 

@@ -39,7 +39,7 @@ from threading import Thread
 from urllib.parse import quote
 
 import py_eureka_client.http_client as http_client
-import py_eureka_client.__netint_utils as netint
+import py_eureka_client.netint_utils as netint
 from py_eureka_client.logger import get_logger
 from py_eureka_client.__dns_txt_resolver import get_txt_dns_record
 from py_eureka_client.__aws_info_loader import AmazonInfo
