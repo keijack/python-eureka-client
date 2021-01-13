@@ -23,6 +23,7 @@ SOFTWARE.
 """
 import socket
 import netifaces
+import ipaddress
 from py_eureka_client.logger import get_logger
 
 _logger = get_logger("netint_utils")
@@ -41,6 +42,30 @@ def get_ip_by_host(host):
     except:
         _logger.warn("Error when getting ip by host", exc_info=True)
         return host
+
+def get_ip_and_host_by_network(network):
+    if network:
+        if_list = netifaces.interfaces()
+        ip = ""
+        host = ""
+        try:
+            for if_name in if_list:
+                ifaddr = netifaces.ifaddresses(if_name)
+                if 2 in ifaddr:
+                    _ip = ifaddr[2][0]["addr"]
+                    if ipaddress.ip_address(_ip) in ipaddress.ip_network(network):
+                        ip = _ip
+                        host = get_host_by_ip(ip)
+                        break
+        except:
+            _logger.warn("Error when getting ip by network", exc_info=True)
+
+        if ip:
+            return ip, host
+    else:
+        _logger.warn("No network defined")
+
+    return "", ""
 
 def get_ip_and_host():
     if_list = netifaces.interfaces()
