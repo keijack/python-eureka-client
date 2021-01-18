@@ -33,9 +33,7 @@ import inspect
 from copy import copy
 from typing import Callable, Dict, List, Union
 import xml.etree.ElementTree as ElementTree
-from threading import Timer
-from threading import RLock
-from threading import Thread
+from threading import Timer, RLock, Thread
 from urllib.parse import quote
 
 import py_eureka_client.http_client as http_client
@@ -346,15 +344,13 @@ def register(eureka_server: str, instance: Instance) -> None:
 
 
 def _register(eureka_server: str, instance_dic: Dict) -> None:
-    req = http_client.Request(f"{_format_url(eureka_server)}apps/{quote(instance_dic['app'])}")
+    req = http_client.Request(f"{_format_url(eureka_server)}apps/{quote(instance_dic['app'])}", method="POST")
     req.add_header('Content-Type', 'application/json')
-    req.get_method = lambda: "POST"
     http_client.load(req, json.dumps({"instance": instance_dic}).encode(_DEFAULT_ENCODING), timeout=_DEFAULT_TIME_OUT)[0]
 
 
 def cancel(eureka_server: str, app_name: str, instance_id: str) -> None:
-    req = http_client.Request(f"{_format_url(eureka_server)}apps/{quote(app_name)}/{quote(instance_id)}")
-    req.get_method = lambda: "DELETE"
+    req = http_client.Request(f"{_format_url(eureka_server)}apps/{quote(app_name)}/{quote(instance_id)}", method="DELETE")
     http_client.load(req, timeout=_DEFAULT_TIME_OUT)[0]
 
 
@@ -368,8 +364,7 @@ def send_heartbeat(eureka_server: str,
     if overriddenstatus != "":
         url += f"&overriddenstatus={overriddenstatus}"
 
-    req = http_client.Request(url)
-    req.get_method = lambda: "PUT"
+    req = http_client.Request(url, method="PUT")
     http_client.load(req, timeout=_DEFAULT_TIME_OUT)[0]
 
 
@@ -383,16 +378,14 @@ def status_update(eureka_server: str,
     if overriddenstatus != "":
         url += f"&overriddenstatus={overriddenstatus}"
 
-    req = http_client.Request(url)
-    req.get_method = lambda: "PUT"
+    req = http_client.Request(url, method="PUT")
     http_client.load(req, timeout=_DEFAULT_TIME_OUT)[0]
 
 
 def delete_status_override(eureka_server: str, app_name: str, instance_id: str, last_dirty_timestamp: str):
     url = f"{_format_url(eureka_server)}apps/{quote(app_name)}/{quote(instance_id)}/status?lastDirtyTimestamp={last_dirty_timestamp}"
 
-    req = http_client.Request(url)
-    req.get_method = lambda: "DELETE"
+    req = http_client.Request(url, method="DELETE")
     http_client.load(req, timeout=_DEFAULT_TIME_OUT)[0]
 
 
@@ -1410,8 +1403,7 @@ class EurekaClient:
             _data = data
 
         def walk_using_urllib(url):
-            req = http_client.Request(url)
-            req.get_method = lambda: method
+            req = http_client.Request(url, method=method)
             heads = headers if headers is not None else {}
             for k, v in heads.items():
                 req.add_header(k, v)
