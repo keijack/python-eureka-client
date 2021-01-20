@@ -180,7 +180,7 @@ import py_eureka_client.netint_utils as netint_utils
 ip, host = netint_utils.get_ip_and_host("192.168.10.0/24")
 
 # you can get the ip only
-netint_utils.get_first_non_loopback_ip("192.168.10.0/24")
+ip = netint_utils.get_first_non_loopback_ip("192.168.10.0/24")
 host = "my-py-component.mydomian.com"
 
 eureka_client.init(eureka_server="your-eureka-server-peer1,your-eureka-server-peer2",
@@ -209,7 +209,7 @@ except urllib.request.HTTPError as e:
     print(e)
 ```
 
-`do_service` function also recieve a `return_type` keyword parameter, which when `json` was passed, the result will be a `dict` type object whereas `response_object` is pass, the original HTTPResponse object will be return. And other parameters are follow the `urllib.request.urlopen` (`urllib2.urlopen` in python2) method, including `data`, etc. Please read the relative document for more information.
+`do_service` function also recieve a `return_type` keyword parameter, which when `json` was passed, the result will be a `dict` type object whereas `response_object` is pass, the original HTTPResponse object will be return. And other parameters are follow the `urllib.request.urlopen` method, including `data`, etc. Please read the relative document for more information.
 
 You can also use its `async` version:
 

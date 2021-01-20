@@ -188,7 +188,7 @@ import py_eureka_client.netint_utils as netint_utils
 ip, host = netint_utils.get_ip_and_host("192.168.10.0/24")
 
 # you can get the ip only
-netint_utils.get_first_non_loopback_ip("192.168.10.0/24")
+ip = netint_utils.get_first_non_loopback_ip("192.168.10.0/24")
 host = "my-py-component.mydomian.com"
 
 eureka_client.init(eureka_server="your-eureka-server-peer1,your-eureka-server-peer2",
@@ -221,7 +221,7 @@ except urllib.request.HTTPError as e:
 
 上述参数中，return_type 可以选择传入`json`，如果传入`json`，则该接口返回一个 `dict` 对象，如果传入`response_object`，那么该方法会返回原始的 HTTPResponse 对象。该参数也可不传入，默认返回的为 `str` 的响应体的内容。
 
-这个方法还接受其他的参数，剩余的参数和 `urllib.request.urlopen`(python2 是 `urllib2.urlopen`) 接口一致。请参考相关的接口或者源代码进行传入。
+这个方法还接受其他的参数，剩余的参数和 `urllib.request.urlopen` 接口一致。请参考相关的接口或者源代码进行传入。
 
 这个方法还提供异步的版本：
 
