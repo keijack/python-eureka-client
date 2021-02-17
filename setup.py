@@ -17,7 +17,7 @@ setuptools.setup(
     url="https://github.com/keijack/python-eureka-client",
     packages=["py_eureka_client"],
     install_requires=[
-        "netifaces",
+        "ifaddr",
         "dnspython"
     ],
     classifiers=[
