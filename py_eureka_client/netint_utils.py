@@ -23,7 +23,7 @@ SOFTWARE.
 """
 import socket
 from typing import Tuple
-import netifaces
+import ifaddr
 import ipaddress
 from py_eureka_client.logger import get_logger
 
@@ -47,20 +47,16 @@ def get_ip_by_host(host):
 
 
 def get_first_non_loopback_ip(network: str = "") -> str:
-    if_list = netifaces.interfaces()
-    ip = ""
-    for if_name in if_list:
-        ifaddr = netifaces.ifaddresses(if_name)
-        if 2 in ifaddr:
-            _ip = ifaddr[2][0]["addr"]
-            if network:
-                if ipaddress.ip_address(_ip) in ipaddress.ip_network(network):
-                    ip = _ip
-                    break
-            elif _ip != "127.0.0.1":
-                ip = _ip
-                break
-    return ip
+    for adapter in adapters:
+        for iface in adapter.ips:
+            if iface.is_IPv4:
+                _ip = iface.ip
+                if network:
+                    if ipaddress.ip_address(_ip) in ipaddress.ip_network(network):
+                        return _ip
+                elif _ip != "127.0.0.1":
+                    return _ip
+    return ""
 
 
 def get_ip_and_host(network: str = "") -> Tuple[str, str]:
