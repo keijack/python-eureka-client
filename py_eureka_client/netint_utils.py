@@ -23,7 +23,7 @@ SOFTWARE.
 """
 import socket
 from typing import Tuple
-import ifaddr
+from ifaddr import get_adapters
 import ipaddress
 from py_eureka_client.logger import get_logger
 
@@ -47,6 +47,7 @@ def get_ip_by_host(host):
 
 
 def get_first_non_loopback_ip(network: str = "") -> str:
+    adapters = get_adapters()
     for adapter in adapters:
         for iface in adapter.ips:
             if iface.is_IPv4:
