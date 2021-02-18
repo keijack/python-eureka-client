@@ -23,3 +23,4 @@ SOFTWARE.
 """
 
 name = "py_eureka_client"
+version = "0.8.12"

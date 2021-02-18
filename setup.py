@@ -1,19 +1,13 @@
 # -*- coding: utf-8 -*-
 import setuptools
-import os
+from py_eureka_client import version
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-ver = os.environ["py_eureka_client_version"]
-if not ver:
-    exit(1)
-
-print("releasing version %s" % ver)
-
 setuptools.setup(
     name="py_eureka_client",
-    version=ver,
+    version=version,
     author="Keijack",
     author_email="keijack.wu@gmail.com",
     description="A eureka client written in python. Support registering your python component to Eureka Server, as well as calling remote services by pulling the the Eureka registry. ",
