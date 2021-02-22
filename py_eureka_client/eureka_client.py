@@ -823,7 +823,9 @@ class EurekaClient:
 
     * instance_host： The host of this instance. 
 
-    * instance_ip: The ip of this instance. If instatnce_host and instance_ip are not specified, will try to find the ip via connection to the eureka server.
+    * instance_ip: The ip of this instance. If instance_host and instance_ip are not specified, will try to find the ip via connection to the eureka server.
+
+    * instance_ip_network: The ip network of this instance. If instance_host and instance_ip are not specified, will try to find the ip from the avaiable network adapters that matches the specified network. For example 192.168.1.0/24.
 
     * instance_port: The port of this instance. 
 
@@ -1548,6 +1550,7 @@ def init(eureka_server: str = _DEFAULT_EUREKA_SERVER_URL,
          instance_id: str = "",
          instance_host: str = "",
          instance_ip: str = "",
+         instance_ip_network: str = "",
          instance_port: int = _DEFAULT_INSTNACE_PORT,
          instance_unsecure_port_enabled: bool = True,
          instance_secure_port: int = _DEFAULT_INSTNACE_SECURE_PORT,
@@ -1594,6 +1597,7 @@ def init(eureka_server: str = _DEFAULT_EUREKA_SERVER_URL,
                               instance_id=instance_id,
                               instance_host=instance_host,
                               instance_ip=instance_ip,
+                              instance_ip_network=instance_ip_network,
                               instance_port=instance_port,
                               instance_unsecure_port_enabled=instance_unsecure_port_enabled,
                               instance_secure_port=instance_secure_port,
