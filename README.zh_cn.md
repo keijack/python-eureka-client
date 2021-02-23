@@ -180,14 +180,24 @@ eureka_client.init(eureka_server="your-eureka-server-peer1,your-eureka-server-pe
 
 如 Spring 的实现一样，`py-eureka-client` 在亚马逊的数据中心，会使用数据中心元数据服务取得的 `local-ipv4` 和 `local-hostname` 做为默认值，否则则会取第一个取得的具有 IPv4 的地址的网卡地址作为默认的地址。
 
-你的机器环境中可能存在多个网卡（特别是使用 docker 容器的时候），那么你可以通过 `netint_utils` 提供的方法取得指定网络的首个 IP 和/或 HOST，然后设入 `instance_ip` 和 `instance_host` 中。
+你的机器环境中可能存在多个网卡（特别是使用 docker 容器的时候），那么你可以使用 `instance_ip_network` 参数指定网段来取得 IP 地址：
+
+```python
+eureka_client.init(eureka_server="your-eureka-server-peer1,your-eureka-server-peer2",
+                eureka_protocol="https",
+                eureka_basic_auth_user="keijack",
+                eureka_basic_auth_password="kjauthpass",
+                eureka_context="/eureka/v2",
+                app_name="python_module_1", 
+                instance_ip_network="192.168.10.0/24",
+                instance_port=9090)
+```
+
+如果你仅想动态取得 IP，但需要手动指定 host，那么你可以使用以下方法来实习：
 
 ```python
 import py_eureka_client.netint_utils as netint_utils
 
-ip, host = netint_utils.get_ip_and_host("192.168.10.0/24")
-
-# you can get the ip only
 ip = netint_utils.get_first_non_loopback_ip("192.168.10.0/24")
 host = "my-py-component.mydomian.com"
 

@@ -172,12 +172,23 @@ eureka_client.init(eureka_server="your-eureka-server-peer1,your-eureka-server-pe
                 instance_port=9090)
 ```
 
-In some case you might have more than one interfaces attached, for example, you are running your application in a docker-container. In this case you can specify a network to be used to get the container's ip and host. 
+In some case you might have more than one interfaces attached, for example, you are running your application in a docker-container. In this case you can specify a network via `instance_ip_network` to be used to get the container's ip and host. You can use:
+
+```python
+eureka_client.init(eureka_server="your-eureka-server-peer1,your-eureka-server-peer2",
+                eureka_protocol="https",
+                eureka_basic_auth_user="keijack",
+                eureka_basic_auth_password="kjauthpass",
+                eureka_context="/eureka/v2",
+                app_name="python_module_1", 
+                instance_ip_network="192.168.10.0/24",
+                instance_port=9090)
+```
+
+If you want to get the ip only and sepecify the host by yourself, try:
 
 ```python
 import py_eureka_client.netint_utils as netint_utils
-
-ip, host = netint_utils.get_ip_and_host("192.168.10.0/24")
 
 # you can get the ip only
 ip = netint_utils.get_first_non_loopback_ip("192.168.10.0/24")
