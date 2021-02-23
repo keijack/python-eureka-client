@@ -823,7 +823,9 @@ class EurekaClient:
 
     * instance_host： The host of this instance. 
 
-    * instance_ip: The ip of this instance. If instatnce_host and instance_ip are not specified, will try to find the ip via connection to the eureka server.
+    * instance_ip: The ip of this instance. If instance_host and instance_ip are not specified, will try to find the ip via connection to the eureka server.
+
+    * instance_ip_network: The ip network of this instance. If instance_host and instance_ip are not specified, will try to find the ip from the avaiable network adapters that matches the specified network. For example 192.168.1.0/24.
 
     * instance_port: The port of this instance. 
 
@@ -881,6 +883,7 @@ class EurekaClient:
                  instance_id: str = "",
                  instance_host: str = "",
                  instance_ip: str = "",
+                 instance_ip_network: str = "",
                  instance_port: int = _DEFAULT_INSTNACE_PORT,
                  instance_unsecure_port_enabled: bool = True,
                  instance_secure_port: int = _DEFAULT_INSTNACE_SECURE_PORT,
@@ -925,6 +928,7 @@ class EurekaClient:
         self.__heartbeat_timer = Timer(renewal_interval_in_secs, self.__heartbeat)
         self.__heartbeat_timer.daemon = True
         self.__instance_ip = instance_ip
+        self.__instance_ip_network = instance_ip_network
         self.__instance_host = instance_host
         self.__aws_metadata = {}
 
@@ -933,7 +937,7 @@ class EurekaClient:
             if data_center_name == "Amazon":
                 self.__aws_metadata = self.__load_ec2_metadata_dict()
             if self.__instance_host == "" and self.__instance_ip == "":
-                self.__instance_ip, self.__instance_host = self.__get_ip_host()
+                self.__instance_ip, self.__instance_host = self.__get_ip_host(instance_ip_network)
             elif self.__instance_host != "" and self.__instance_ip == "":
                 self.__instance_ip = netint.get_ip_by_host(self.__instance_host)
                 if not EurekaClient.__is_ip(self.__instance_ip):
@@ -1000,8 +1004,8 @@ class EurekaClient:
 
         self.__application_mth_lock = RLock()
 
-    def __get_ip_host(self):
-        ip, host = netint.get_ip_and_host()
+    def __get_ip_host(self, network):
+        ip, host = netint.get_ip_and_host(network)
         if self.__aws_metadata and "local-ipv4" in self.__aws_metadata and self.__aws_metadata["local-ipv4"]:
             ip = self.__aws_metadata["local-ipv4"]
         if self.__aws_metadata and "local-hostname" in self.__aws_metadata and self.__aws_metadata["local-hostname"]:
@@ -1546,6 +1550,7 @@ def init(eureka_server: str = _DEFAULT_EUREKA_SERVER_URL,
          instance_id: str = "",
          instance_host: str = "",
          instance_ip: str = "",
+         instance_ip_network: str = "",
          instance_port: int = _DEFAULT_INSTNACE_PORT,
          instance_unsecure_port_enabled: bool = True,
          instance_secure_port: int = _DEFAULT_INSTNACE_SECURE_PORT,
@@ -1592,6 +1597,7 @@ def init(eureka_server: str = _DEFAULT_EUREKA_SERVER_URL,
                               instance_id=instance_id,
                               instance_host=instance_host,
                               instance_ip=instance_ip,
+                              instance_ip_network=instance_ip_network,
                               instance_port=instance_port,
                               instance_unsecure_port_enabled=instance_unsecure_port_enabled,
                               instance_secure_port=instance_secure_port,
