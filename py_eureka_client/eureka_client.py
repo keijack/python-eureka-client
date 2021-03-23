@@ -167,7 +167,7 @@ class Instance:
                  lastDirtyTimestamp=0,
                  actionType=ACTION_TYPE_ADDED,  # ADDED, MODIFIED, DELETED
                  asgName=""):
-        self.instanceId: str = instanceId
+        self.__instanceId: str = instanceId
         self.sid: str = sid
         self.app: str = app
         self.appGroupName: str = appGroupName
@@ -192,6 +192,14 @@ class Instance:
         self.lastDirtyTimestamp: int = lastDirtyTimestamp
         self.actionType: int = actionType
         self.asgName: int = asgName
+
+    @property
+    def instanceId(self):
+        return self.__instanceId if self.__instanceId else f"{self.hostName}:{self.ipAddr}:{self.app}:{self.port.port if self.port else 0}"
+
+    @instanceId.setter
+    def instanceId(self, id):
+        self.__instanceId = id
 
     @property
     def zone(self) -> str:
