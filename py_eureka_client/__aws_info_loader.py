@@ -58,7 +58,7 @@ class AmazonInfo:
             _logger.warn(f"Cannot connect to amazon metadata services in address [{_AWS_METADATA_SERVICE_IP}], return default value. ")
             return default_value
         try:
-            return http_client.load(f"{_AWS_METADATA_SERVICE_URL}meta-data/{meta_path}")
+            return http_client.load(f"{_AWS_METADATA_SERVICE_URL}meta-data/{meta_path}")[0]
         except Exception:
             _logger.exception(f"error when loading metadata from aws {meta_path}")
             return default_value
@@ -68,7 +68,7 @@ class AmazonInfo:
             _logger.warn(f"Cannot connect to amazon metadata services in address [{_AWS_METADATA_SERVICE_IP}], return default value. ")
             return default_value
         try:
-            doc = http_client.load(f"{_AWS_METADATA_SERVICE_URL}dynamic/instance-identity/document")
+            doc = http_client.load(f"{_AWS_METADATA_SERVICE_URL}dynamic/instance-identity/document")[0]
             return json.loads(doc)
         except Exception:
             _logger.exception("error when loading dynamic instance identity document from aws")
