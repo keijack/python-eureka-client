@@ -53,14 +53,15 @@ class AmazonInfo:
         _logger.warn(f"Cannot connect to amazon metadata services in address [{_AWS_METADATA_SERVICE_IP}]")
         return False
 
-    def get_ec2_metadata(self, meta_path, default_value=""):
+    def get_ec2_metadata(self, meta_path, default_value="", ignore_error=False):
         if not self.__can_access:
             _logger.warn(f"Cannot connect to amazon metadata services in address [{_AWS_METADATA_SERVICE_IP}], return default value. ")
             return default_value
         try:
             return http_client.load(f"{_AWS_METADATA_SERVICE_URL}meta-data/{meta_path}")[0]
         except Exception:
-            _logger.exception(f"error when loading metadata from aws {meta_path}")
+            log_excep = _logger.debug if ignore_error else _logger.exception
+            log_excep(f"error when loading metadata from aws {meta_path}")
             return default_value
 
     def get_instance_identity_document(self, default_value={}):

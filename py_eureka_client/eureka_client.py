@@ -1034,9 +1034,9 @@ class EurekaClient:
             'instance-type': amazon_info.get_ec2_metadata('instance-type'),
             'local-ipv4': amazon_info.get_ec2_metadata('local-ipv4'),
             'local-hostname': amazon_info.get_ec2_metadata('local-hostname'),
-            'availability-zone': amazon_info.get_ec2_metadata('placement/availability-zone'),
-            'public-hostname': amazon_info.get_ec2_metadata('public-hostname'),
-            'public-ipv4': amazon_info.get_ec2_metadata('public-ipv4'),
+            'availability-zone': amazon_info.get_ec2_metadata('placement/availability-zone', ignore_error=True),
+            'public-hostname': amazon_info.get_ec2_metadata('public-hostname', ignore_error=True),
+            'public-ipv4': amazon_info.get_ec2_metadata('public-ipv4', ignore_error=True),
             'mac': mac,
             'vpcId': vpc_id
         }
