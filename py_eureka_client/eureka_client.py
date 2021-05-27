@@ -1531,7 +1531,7 @@ class EurekaClient:
         self.__heartbeat_timer.start()
 
     def stop(self) -> None:
-        if self.__heartbeat_timer.isAlive():
+        if self.__heartbeat_timer.is_alive():
             self.__heartbeat_timer.cancel()
         if self.__should_register:
             self.__stop_registery()
