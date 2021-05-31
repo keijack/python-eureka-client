@@ -230,7 +230,7 @@ eureka_client.init(eureka_server="http://your-eureka-server-peer1,http://your-eu
                                 app_name="python_module_1",
                                 instance_port=your_rest_server_port,
                                 on_error=on_err)
-
+```
 
 ### 调用远程服务
 
