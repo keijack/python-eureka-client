@@ -76,6 +76,13 @@ This is for the DiscoveryClient, when this strategy is set, get_service_url will
 HA_STRATEGY_OTHER: int = 3
 
 """
+The error types that will send back to on_error callback function
+"""
+ERROR_REGISTER: str = "EUREKA_ERROR_REGISTER"
+ERROR_DISCOVER: str = "EUREKA_ERROR_DISCOVER"
+ERROR_STATUS_UPDATE: str = "EUREKA_ERROR_STATUS_UPDATE"
+
+"""
 The timeout seconds that all http request to the eureka server
 """
 _DEFAULT_TIME_OUT = 5
@@ -98,6 +105,7 @@ Default configurations
 """
 _DEFAULT_ENCODING = "utf-8"
 _DEFAUTL_ZONE = "default"
+
 
 ### =========================> Base Mehods <======================================== ###
 ### Beans ###
@@ -887,6 +895,7 @@ class EurekaClient:
                  prefer_same_zone: bool = True,
                  should_register: bool = True,
                  should_discover: bool = True,
+                 on_error: Callable = None,
                  app_name: str = "",
                  instance_id: str = "",
                  instance_host: str = "",
@@ -939,13 +948,14 @@ class EurekaClient:
         self.__instance_ip_network = instance_ip_network
         self.__instance_host = instance_host
         self.__aws_metadata = {}
+        self.__on_error_callback = on_error
 
         # For Registery
         if should_register:
             if data_center_name == "Amazon":
                 self.__aws_metadata = self.__load_ec2_metadata_dict()
             if self.__instance_host == "" and self.__instance_ip == "":
-                self.__instance_ip, self.__instance_host = self.__get_ip_host(instance_ip_network)
+                self.__instance_ip, self.__instance_host = self.__get_ip_host(self.__instance_ip_network)
             elif self.__instance_host != "" and self.__instance_ip == "":
                 self.__instance_ip = netint.get_ip_by_host(self.__instance_host)
                 if not EurekaClient.__is_ip(self.__instance_ip):
@@ -1188,6 +1198,10 @@ class EurekaClient:
         s.close()
         return ip
 
+    def _on_error(self, error_type: str, exception: Exception):
+        if self.__on_error_callback and callable(self.__on_error_callback):
+            self.__on_error_callback(error_type, exception)
+
     def register(self, status: str = INSTANCE_STATUS_UP, overriddenstatus: str = INSTANCE_STATUS_UNKNOWN) -> None:
         self.__instance["status"] = status
         self.__instance["overriddenstatus"] = overriddenstatus
@@ -1197,9 +1211,10 @@ class EurekaClient:
             def do_register(url):
                 _register(url, self.__instance)
             self.__connect_to_eureka_server(do_register)
-        except:
+        except Exception as e:
             self.__alive = False
             _logger.warn("Register error! Will try in next heartbeat. ", exc_info=True)
+            self._on_error(ERROR_REGISTER, e)
         else:
             _logger.debug("register successfully!")
             self.__alive = True
@@ -1209,8 +1224,9 @@ class EurekaClient:
             def do_cancel(url):
                 cancel(url, self.__instance["app"], self.__instance["instanceId"])
             self.__connect_to_eureka_server(do_cancel)
-        except:
+        except Exception as e:
             _logger.warn("Cancel error!", exc_info=True)
+            self._on_error(ERROR_STATUS_UPDATE, e)
         else:
             self.__alive = False
 
@@ -1226,8 +1242,9 @@ class EurekaClient:
                                self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"],
                                status=self.__instance["status"], overriddenstatus=overridden_status)
             self.__connect_to_eureka_server(do_send_heartbeat)
-        except:
+        except Exception as e:
             _logger.warn("Cannot send heartbeat to server, try to register. ", exc_info=True)
+            self._on_error(ERROR_STATUS_UPDATE, e)
             self.register()
 
     def status_update(self, new_status: str) -> None:
@@ -1237,12 +1254,17 @@ class EurekaClient:
                 status_update(url, self.__instance["app"], self.__instance["instanceId"],
                               self.__instance["lastDirtyTimestamp"], new_status)
             self.__connect_to_eureka_server(do_status_update)
-        except:
+        except Exception as e:
             _logger.warn("update status error!", exc_info=True)
+            self._on_error(ERROR_STATUS_UPDATE, e)
 
     def delete_status_override(self) -> None:
-        self.__connect_to_eureka_server(lambda url: delete_status_override(
-            url, self.__instance["app"], self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"]))
+        try:
+            self.__connect_to_eureka_server(lambda url: delete_status_override(
+                url, self.__instance["app"], self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"]))
+        except Exception as e:
+            _logger.warn("delete status overrid error!", exc_info=True)
+            self._on_error(ERROR_STATUS_UPDATE, e)
 
     def __start_register(self):
         _logger.debug("start to registry client...")
@@ -1269,8 +1291,9 @@ class EurekaClient:
             self.__delta = self.__applications
         try:
             self.__connect_to_eureka_server(do_pull)
-        except:
+        except Exception as e:
             _logger.warn("pull full registry from eureka server error!", exc_info=True)
+            self._on_error(ERROR_DISCOVER, e)
 
     def __fetch_delta(self):
         def do_fetch(url):
@@ -1289,8 +1312,9 @@ class EurekaClient:
                 self.__pull_full_registry()
         try:
             self.__connect_to_eureka_server(do_fetch)
-        except:
+        except Exception as e:
             _logger.warn("fetch delta from eureka server error!", exc_info=True)
+            self._on_error(ERROR_DISCOVER, e)
 
     def __is_hash_match(self):
         app_hash = self.__get_applications_hash()
@@ -1554,6 +1578,7 @@ def init(eureka_server: str = _DEFAULT_EUREKA_SERVER_URL,
          prefer_same_zone: bool = True,
          should_register: bool = True,
          should_discover: bool = True,
+         on_error: Callable = None,
          app_name: str = "",
          instance_id: str = "",
          instance_host: str = "",
@@ -1601,6 +1626,7 @@ def init(eureka_server: str = _DEFAULT_EUREKA_SERVER_URL,
                               prefer_same_zone=prefer_same_zone,
                               should_register=should_register,
                               should_discover=should_discover,
+                              on_error=on_error,
                               app_name=app_name,
                               instance_id=instance_id,
                               instance_host=instance_host,
