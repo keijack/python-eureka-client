@@ -205,6 +205,27 @@ eureka_client.init(eureka_server="your-eureka-server-peer1,your-eureka-server-pe
                 instance_port=9090)
 ```
 
+### Error Callback
+
+You can specify a callback function when initializing the eureka client, when errors occur in `register`, `discover` or `status update` phase, the callback function will be called to inform you. The callback function will be called only when all the eureka server url are all tried and fails. 
+
+The callback function should accept 2 arguments. which are the error type and the exception itself. please check:
+
+```python
+def on_err(err_type: str, err: Exception):
+    if err_type in (eureka_client.ERROR_REGISTER, eureka_client.ERROR_DISCOVER):
+        eureka_client.stop()
+    else:
+        print(f"{err_type}::{err}")
+
+your_rest_server_port = 9090
+eureka_client.init(eureka_server="http://your-eureka-server-peer1,http://your-eureka-server-peer2",
+                                app_name="python_module_1",
+                                instance_port=your_rest_server_port,
+                                on_error=on_err)
+
+```
+
 ### Call Remote Service
 
 After `init` the eureka client, this is the most simplist way to do service:

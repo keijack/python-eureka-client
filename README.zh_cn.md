@@ -212,6 +212,26 @@ eureka_client.init(eureka_server="your-eureka-server-peer1,your-eureka-server-pe
                 instance_port=9090)
 ```
 
+### 错误回调
+
+你可以在初始化时指定一个错误回调函数，当`注册`、`发现`、`状态更新`时，如果发生错误，这个回调函数会被触发。请注意，如果你传入多个 eureka 服务器的 url，那么该回调会在所有服务器均尝试失败之后才会被触发。
+
+定义的回调函数必须接收两个变量：一个是错误类型，一个是异常本身，请参考：
+
+```python
+def on_err(err_type: str, err: Exception):
+    if err_type in (eureka_client.ERROR_REGISTER, eureka_client.ERROR_DISCOVER):
+        eureka_client.stop()
+    else:
+        print(f"{err_type}::{err}")
+
+your_rest_server_port = 9090
+eureka_client.init(eureka_server="http://your-eureka-server-peer1,http://your-eureka-server-peer2",
+                                app_name="python_module_1",
+                                instance_port=your_rest_server_port,
+                                on_error=on_err)
+
+
 ### 调用远程服务
 
 当初始化完 eureka client 之后，你就可以通过拉取 eureka server 的信息来调用远程服务了。
