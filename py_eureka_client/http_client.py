@@ -42,7 +42,7 @@ _DEFAULT_ENCODING = "utf-8"
 
 _URL_REGEX = re.compile(
     r'^((?:http)s?)://'  # http:// or https://
-    r'(([A-Z0-9-_~!.%]+):([A-Z0-9_~!.%]+)@)?'  # basic authentication -> username:password@
+    r'(([A-Z0-9-_~!.%]+):([A-Z0-9-_~!.%]+)@)?'  # basic authentication -> username:password@
     r'((?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|'  # domain...
     r'(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)|'  # domain name without `.`
     r"(?:\[((?:[A-F0-9]{1,4}:){7}[A-F0-9]{1,4})\])|"  # ipv6
