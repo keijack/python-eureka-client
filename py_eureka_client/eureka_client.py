@@ -1395,7 +1395,7 @@ class EurekaClient:
                 _logger.debug("do service with url::" + url)
                 return walker(url)
             except (http_client.HTTPError, http_client.URLError):
-                _logger.warn(f"do service {service} in node [{node.instanceId}] error, use next node.")
+                _logger.warning(f"do service {service} in node [{node.instanceId}] error, use next node.", exc_info=True)
                 error_nodes.append(node.instanceId)
                 node = self.__get_available_service(app_name, error_nodes)
 
@@ -1519,7 +1519,7 @@ class EurekaClient:
         else:
             return None
 
-    def __generate_service_url(self, instance, prefer_ip, prefer_https):
+    def __generate_service_url(self, instance: Instance, prefer_ip, prefer_https):
         if instance is None:
             return None
         schema = "http"
@@ -1542,7 +1542,10 @@ class EurekaClient:
 
         host = instance.ipAddr if prefer_ip else instance.hostName
 
-        return f"{schema}://{host}:{port}/"
+        if (schema == "http" and port == 80) or (schema == 'https' and port == 443):
+            return f"{schema}://{host}/"
+        else:
+            return f"{schema}://{host}:{port}/"
 
     def __start_discover(self):
         self.__pull_full_registry()
