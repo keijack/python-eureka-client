@@ -615,7 +615,7 @@ class EurekaServerConf(object):
         self.__servers = {}
         self.region: str = region
         self.__zone = zone
-        self.__eureka_availability_zones = eureka_availability_zones
+        self.__eureka_availability_zones: dict = eureka_availability_zones
         _zone = zone if zone else _DEFAUTL_ZONE
         if eureka_domain:
             zone_urls = get_txt_dns_record(f"txt.{region}.{eureka_domain}")
@@ -644,7 +644,7 @@ class EurekaServerConf(object):
         if self.__zone:
             return self.__zone
         elif self.__eureka_availability_zones:
-            return self.__eureka_availability_zones.keys()[0]
+            return list(self.__eureka_availability_zones.keys())[0]
         else:
             return _DEFAUTL_ZONE
 
