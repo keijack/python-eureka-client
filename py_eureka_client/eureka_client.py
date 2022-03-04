@@ -880,6 +880,10 @@ class EurekaClient:
 
     * ha_strategy: Specify the strategy how to choose a instance when there are more than one instanse of an App. 
 
+    * strict_service_error_policy: When set to True, all error(Including connection error and HttpError, like http 
+        status code is not 200) will consider as error; Otherwise, only (ConnectionError, TimeoutError, socket.timeout) 
+        will be considered as error, and other excptions and errors will be raised to upstream. Default is True.
+
     """
 
     def __init__(self,
@@ -917,7 +921,8 @@ class EurekaClient:
                  is_coordinating_discovery_server: bool = False,
                  metadata: Dict = {},
                  remote_regions: List[str] = [],
-                 ha_strategy: int = HA_STRATEGY_RANDOM):
+                 ha_strategy: int = HA_STRATEGY_RANDOM,
+                 strict_service_error_policy: bool = True):
         assert app_name is not None and app_name != "" if should_register else True, "application name must be specified."
         assert instance_port > 0 if should_register else True, "port is unvalid"
         assert isinstance(metadata, dict), "metadata must be dict"
@@ -1018,6 +1023,7 @@ class EurekaClient:
         self.__applications = None
         self.__delta = None
         self.__ha_strategy = ha_strategy
+        self.__strict_service_error_policy = strict_service_error_policy
         self.__ha_cache = {}
 
         self.__application_mth_lock = RLock()
@@ -1394,10 +1400,17 @@ class EurekaClient:
                     url = url + service
                 _logger.debug("do service with url::" + url)
                 return walker(url)
-            except (http_client.HTTPError, http_client.URLError):
-                _logger.warning(f"do service {service} in node [{node.instanceId}] error, use next node.", exc_info=True)
+            except (ConnectionError, TimeoutError, socket.timeout) as e:
+                _logger.warning(f"do service {service} in node [{node.instanceId}] error, use next node. Error: {e}")
                 error_nodes.append(node.instanceId)
                 node = self.__get_available_service(app_name, error_nodes)
+            except (http_client.HTTPError, http_client.URLError) as e:
+                if self.__strict_service_error_policy:
+                    _logger.warning(f"do service {service} in node [{node.instanceId}] error, use next node. Error: {e}")
+                    error_nodes.append(node.instanceId)
+                    node = self.__get_available_service(app_name, error_nodes)
+                else:
+                    raise e
 
         raise http_client.URLError("Try all up instances in registry, but all fail")
 
@@ -1603,7 +1616,8 @@ def init(eureka_server: str = _DEFAULT_EUREKA_SERVER_URL,
          is_coordinating_discovery_server: bool = False,
          metadata: Dict = {},
          remote_regions: List[str] = [],
-         ha_strategy: int = HA_STRATEGY_RANDOM) -> EurekaClient:
+         ha_strategy: int = HA_STRATEGY_RANDOM,
+         strict_service_error_policy: bool = True) -> EurekaClient:
     """
     Initialize an EurekaClient object and put it to cache, you can use a set of functions to do the service.
 
@@ -1651,7 +1665,8 @@ def init(eureka_server: str = _DEFAULT_EUREKA_SERVER_URL,
                               is_coordinating_discovery_server=is_coordinating_discovery_server,
                               metadata=metadata,
                               remote_regions=remote_regions,
-                              ha_strategy=ha_strategy)
+                              ha_strategy=ha_strategy,
+                              strict_service_error_policy=strict_service_error_policy)
         __cache_clients[__cache_key] = client
         client.start()
         return client
