@@ -22,17 +22,21 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-import socket
 import re
 import base64
 import gzip
-import ssl
 from typing import Union
 
 import urllib.request
-from http.client import HTTPResponse
-from urllib.error import HTTPError
-from urllib.error import URLError
+import urllib.error
+
+
+class HTTPError(urllib.error.HTTPError):
+    pass
+
+
+class URLError(urllib.error.URLError):
+    pass
 
 
 """
@@ -42,8 +46,10 @@ _DEFAULT_ENCODING = "utf-8"
 
 _URL_REGEX = re.compile(
     r'^((?:http)s?)://'  # http:// or https://
-    r'(([A-Z0-9-_~!.%]+):([A-Z0-9-_~!.%]+)@)?'  # basic authentication -> username:password@
-    r'((?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|'  # domain...
+    # basic authentication -> username:password@
+    r'(([A-Z0-9-_~!.%]+):([A-Z0-9-_~!.%]+)@)?'
+    # domain...
+    r'((?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|'
     r'(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)|'  # domain name without `.`
     r"(?:\[((?:[A-F0-9]{1,4}:){7}[A-F0-9]{1,4})\])|"  # ipv6
     r'localhost|'  # localhost...
@@ -71,14 +77,12 @@ def parse_url(url):
             "port": int(m.group(7)) if m.group(7) is not None else None
         }
     else:
-        raise URLError(f"url[{url}] is not a valid url." )
+        raise URLError(f"url[{url}] is not a valid url.")
 
 
-class Request(urllib.request.Request):
+class HttpRequest:
 
-    def __init__(self, url, data=None, headers={},
-                 origin_req_host=None, unverifiable=False,
-                 method=None):
+    def __init__(self, url, headers={}, method=None):
         url_match = _URL_REGEX.match(url)
         if url_match is None:
             raise URLError("Unvalid URL")
@@ -86,63 +90,62 @@ class Request(urllib.request.Request):
         url_addr = url_obj["url"]
         url_auth = url_obj["auth"]
 
-        super().__init__(url_addr, data=data, headers=headers,
-                         origin_req_host=origin_req_host, unverifiable=unverifiable,
-                         method=method)
+        self.url = url_addr
+        self.headers = headers or {}
+        self.method = method
 
         if url_auth is not None:
-            self.add_header('Authorization', f'Basic {url_auth}')
+            self.headers['Authorization'] = f'Basic {url_auth}'
+
+    def add_header(self, key: str, value: str):
+        self.headers[key] = value
+
+    def _to_urllib_request(self):
+        return urllib.request.Request(self.url, headers=self.headers, method=self.method)
+
+
+class HttpResponse:
+
+    def __init__(self) -> None:
+        self.response = None
+        self.__body_read = False
+        self.__body_text = ''
+
+    def __read_body(self):
+        if self.response.info().get("Content-Encoding") == "gzip":
+            f = gzip.GzipFile(fileobj=self.response)
+        else:
+            f = self.response
+        self.__body_text = f.read().decode(_DEFAULT_ENCODING)
+        f.close()
+
+    @property
+    def body_text(self):
+        if not self.__body_read:
+            self.__read_body()
+        return self.__body_text
 
 
 class HttpClient:
 
-    def __init__(self, request: Union[str, urllib.request.Request] = None,
-                 data: bytes = None, timeout: float = socket._GLOBAL_DEFAULT_TIMEOUT,
-                 cafile: str = None, capath: str = None, cadefault: bool = False, context: ssl.SSLContext = None):
-        self.request = request
-        self.data = data
-        self.timeout = timeout
-        self.cafile = cafile
-        self.capath = capath
-        self.cadefault = cadefault
-        self.context = context
-
-    def urlopen(self):
-        return urllib.request.urlopen(self.request, data=self.data, timeout=self.timeout,
-                                      cafile=self.cafile, capath=self.capath,
-                                      cadefault=self.cadefault, context=self.context)
-
-    def read_response_body(self, res) -> str:
-        if res.info().get("Content-Encoding") == "gzip":
-            f = gzip.GzipFile(fileobj=res)
+    async def urlopen(self, request: Union[str, HttpRequest] = None,
+                      data: bytes = None, timeout: float = None) -> HttpResponse:
+        if isinstance(request, HttpRequest):
+            req = request
+        elif isinstance(request, str):
+            req = HttpRequest(request)
         else:
-            f = res
+            raise URLError("Unvalid URL")
 
-        txt = f.read().decode(_DEFAULT_ENCODING)
-        f.close()
-        return txt
-
-
-__HTTP_CLIENT_CLASS__ = HttpClient
+        res = HttpResponse()
+        res.response = urllib.request.urlopen(req._to_urllib_request(), data=data, timeout=timeout)
+        return res
 
 
-def set_http_client_class(clz: HttpClient) -> None:
-    assert issubclass(clz, HttpClient)
-    global __HTTP_CLIENT_CLASS__
-    __HTTP_CLIENT_CLASS__ = clz
+http_client = HttpClient()
 
 
-def load(url, data: bytes = None, timeout: float = socket._GLOBAL_DEFAULT_TIMEOUT,
-         cafile: str = None, capath: str = None, cadefault: bool = False, context: ssl.SSLContext = None):
-    if isinstance(url, urllib.request.Request):
-        request = url
-    elif isinstance(url, str):
-        request = Request(url)
-    else:
-        raise URLError("Unvalid URL")
-    request.add_header("Accept-encoding", "gzip")
-    http_cli = __HTTP_CLIENT_CLASS__(request=request, data=data, timeout=timeout,
-                                     cafile=cafile, capath=capath, cadefault=cadefault, context=context)
-    res = http_cli.urlopen()
-    txt = http_cli.read_response_body(res)
-    return txt, res
+def set_http_client(client: HttpClient) -> None:
+    assert isinstance(client, HttpClient)
+    global http_client
+    http_client = client

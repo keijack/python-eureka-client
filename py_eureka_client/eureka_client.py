@@ -22,18 +22,20 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-import atexit
+
+import asyncio
+
 import json
 import re
 import socket
 import time
-import ssl
+
 import random
-import inspect
+
 from copy import copy
 from typing import Callable, Dict, List, Union
 import xml.etree.ElementTree as ElementTree
-from threading import Timer, RLock, Thread
+from threading import RLock, Timer
 from urllib.parse import quote
 
 import py_eureka_client.http_client as http_client
@@ -156,7 +158,8 @@ class Instance:
                  appGroupName="",
                  ipAddr="",
                  port=PortWrapper(port=_DEFAULT_INSTNACE_PORT, enabled=True),
-                 securePort=PortWrapper(port=_DEFAULT_INSTNACE_SECURE_PORT, enabled=False),
+                 securePort=PortWrapper(
+                     port=_DEFAULT_INSTNACE_SECURE_PORT, enabled=False),
                  homePageUrl="",
                  statusPageUrl="",
                  healthCheckUrl="",
@@ -314,7 +317,7 @@ class Applications:
 
 ########################## Basic functions #################################
 ####### Registry functions #########
-def register(eureka_server: str, instance: Instance) -> None:
+async def register(eureka_server: str, instance: Instance) -> None:
     instance_dic = {
         'instanceId': instance.instanceId,
         'hostName': instance.hostName,
@@ -356,60 +359,64 @@ def register(eureka_server: str, instance: Instance) -> None:
     }
     if instance.dataCenterInfo.metadata:
         instance_dic["dataCenterInfo"]["metadata"] = instance.dataCenterInfo.metadata
-    _register(eureka_server, instance_dic)
+    await _register(eureka_server, instance_dic)
 
 
-def _register(eureka_server: str, instance_dic: Dict) -> None:
-    req = http_client.Request(f"{_format_url(eureka_server)}apps/{quote(instance_dic['app'])}", method="POST")
-    req.add_header('Content-Type', 'application/json')
-    http_client.load(req, json.dumps({"instance": instance_dic}).encode(_DEFAULT_ENCODING), timeout=_DEFAULT_TIME_OUT)[0]
+async def _register(eureka_server: str, instance_dic: Dict) -> None:
+    req = http_client.HttpRequest(f"{_format_url(eureka_server)}apps/{quote(instance_dic['app'])}",
+                                  method="POST",
+                                  headers={"Content-Type": "application/json"})
+    await http_client.http_client.urlopen(req, json.dumps({"instance": instance_dic}).encode(
+        _DEFAULT_ENCODING), timeout=_DEFAULT_TIME_OUT)
 
 
-def cancel(eureka_server: str, app_name: str, instance_id: str) -> None:
-    req = http_client.Request(f"{_format_url(eureka_server)}apps/{quote(app_name)}/{quote(instance_id)}", method="DELETE")
-    http_client.load(req, timeout=_DEFAULT_TIME_OUT)[0]
+async def cancel(eureka_server: str, app_name: str, instance_id: str) -> None:
+    req = http_client.HttpRequest(f"{_format_url(eureka_server)}apps/{quote(app_name)}/{quote(instance_id)}",
+                                  method="DELETE")
+    await http_client.http_client.urlopen(req, timeout=_DEFAULT_TIME_OUT)
 
 
-def send_heartbeat(eureka_server: str,
-                   app_name: str,
-                   instance_id: str,
-                   last_dirty_timestamp: int,
-                   status: str = INSTANCE_STATUS_UP,
-                   overriddenstatus: str = "") -> None:
+async def send_heartbeat(eureka_server: str,
+                         app_name: str,
+                         instance_id: str,
+                         last_dirty_timestamp: int,
+                         status: str = INSTANCE_STATUS_UP,
+                         overriddenstatus: str = "") -> None:
     url = f"{_format_url(eureka_server)}apps/{quote(app_name)}/{quote(instance_id)}?status={status}&lastDirtyTimestamp={last_dirty_timestamp}"
     if overriddenstatus != "":
         url += f"&overriddenstatus={overriddenstatus}"
 
-    req = http_client.Request(url, method="PUT")
-    http_client.load(req, timeout=_DEFAULT_TIME_OUT)[0]
+    req = http_client.HttpRequest(url, method="PUT")
+    await http_client.http_client.urlopen(req, timeout=_DEFAULT_TIME_OUT)
 
 
-def status_update(eureka_server: str,
-                  app_name: str,
-                  instance_id: str,
-                  last_dirty_timestamp,
-                  status: str = INSTANCE_STATUS_OUT_OF_SERVICE,
-                  overriddenstatus: str = ""):
+async def status_update(eureka_server: str,
+                        app_name: str,
+                        instance_id: str,
+                        last_dirty_timestamp,
+                        status: str = INSTANCE_STATUS_OUT_OF_SERVICE,
+                        overriddenstatus: str = ""):
     url = f"{_format_url(eureka_server)}apps/{quote(app_name)}/{quote(instance_id)}/status?value={status}&lastDirtyTimestamp={last_dirty_timestamp}"
     if overriddenstatus != "":
         url += f"&overriddenstatus={overriddenstatus}"
 
-    req = http_client.Request(url, method="PUT")
-    http_client.load(req, timeout=_DEFAULT_TIME_OUT)[0]
+    req = http_client.HttpRequest(url, method="PUT")
+    await http_client.http_client.urlopen(req, timeout=_DEFAULT_TIME_OUT)
 
 
-def delete_status_override(eureka_server: str, app_name: str, instance_id: str, last_dirty_timestamp: str):
+async def delete_status_override(eureka_server: str, app_name: str, instance_id: str, last_dirty_timestamp: str):
     url = f"{_format_url(eureka_server)}apps/{quote(app_name)}/{quote(instance_id)}/status?lastDirtyTimestamp={last_dirty_timestamp}"
 
-    req = http_client.Request(url, method="DELETE")
-    http_client.load(req, timeout=_DEFAULT_TIME_OUT)[0]
+    req = http_client.HttpRequest(url, method="DELETE")
+    await http_client.http_client.urlopen(req, timeout=_DEFAULT_TIME_OUT)
 
 
 ####### Discovory functions ########
 
 
-def get_applications(eureka_server: str, regions: List[str] = []) -> Applications:
-    return _get_applications_(f"{_format_url(eureka_server)}apps/", regions)
+async def get_applications(eureka_server: str, regions: List[str] = []) -> Applications:
+    res = await _get_applications_(f"{_format_url(eureka_server)}apps/", regions)
+    return res
 
 
 def _format_url(url):
@@ -419,13 +426,15 @@ def _format_url(url):
         return url + "/"
 
 
-def _get_applications_(url, regions=[]):
+async def _get_applications_(url, regions=[]):
     _url = url
     if len(regions) > 0:
-        _url = _url + ("&" if "?" in _url else "?") + "regions=" + (",".join(regions))
+        _url = _url + ("&" if "?" in _url else "?") + \
+            "regions=" + (",".join(regions))
 
-    txt = http_client.load(_url, timeout=_DEFAULT_TIME_OUT)[0]
-    return _build_applications(ElementTree.fromstring(txt.encode(_DEFAULT_ENCODING)))
+    res = await http_client.http_client.urlopen(
+        _url, timeout=_DEFAULT_TIME_OUT)
+    return _build_applications(ElementTree.fromstring(res.body_text.encode(_DEFAULT_ENCODING)))
 
 
 def _build_applications(xml_node):
@@ -499,7 +508,8 @@ def _build_instance(xml_node):
         elif child_node.tag == "leaseInfo":
             instance.leaseInfo = _build_lease_info(child_node)
         elif child_node.tag == "isCoordinatingDiscoveryServer":
-            instance.isCoordinatingDiscoveryServer = (child_node.text == "true")
+            instance.isCoordinatingDiscoveryServer = (
+                child_node.text == "true")
         elif child_node.tag == "metadata":
             instance.metadata = _build_metadata(child_node)
         elif child_node.tag == "lastUpdatedTimestamp":
@@ -574,23 +584,27 @@ def get_secure_vip(eureka_server: str, svip: str, regions: List[str] = []) -> Ap
     return _get_applications_(f"{_format_url(eureka_server)}svips/{svip}", regions)
 
 
-def get_application(eureka_server: str, app_name: str) -> Application:
+async def get_application(eureka_server: str, app_name: str) -> Application:
     url = f"{_format_url(eureka_server)}apps/{quote(app_name)}"
-    txt = http_client.load(url, timeout=_DEFAULT_TIME_OUT)[0]
-    return _build_application(ElementTree.fromstring(txt))
+    res = await http_client.http_client.urlopen(url, timeout=_DEFAULT_TIME_OUT)
+    return _build_application(ElementTree.fromstring(res.body_text))
 
 
-def get_app_instance(eureka_server: str, app_name: str, instance_id: str) -> Instance:
-    return _get_instance_(f"{_format_url(eureka_server)}apps/{quote(app_name)}/{quote(instance_id)}")
+async def get_app_instance(eureka_server: str, app_name: str, instance_id: str) -> Instance:
+    res = await _get_instance_(f"{_format_url(eureka_server)}apps/{quote(app_name)}/{quote(instance_id)}")
+    return res
 
 
-def get_instance(eureka_server: str, instance_id: str) -> Instance:
-    return _get_instance_(f"{_format_url(eureka_server)}instances/{quote(instance_id)}")
+async def get_instance(eureka_server: str, instance_id: str) -> Instance:
+    res = _get_instance_(
+        f"{_format_url(eureka_server)}instances/{quote(instance_id)}")
+    return res
 
 
-def _get_instance_(url):
-    txt = http_client.load(url, timeout=_DEFAULT_TIME_OUT)[0]
-    return _build_instance(ElementTree.fromstring(txt))
+async def _get_instance_(url):
+    res = await http_client.http_client.urlopen(
+        url, timeout=_DEFAULT_TIME_OUT)
+    return _build_instance(ElementTree.fromstring(res.body_text))
 
 
 def _current_time_millis():
@@ -683,7 +697,8 @@ class EurekaServerConf(object):
         if url.find("/") > 0:
             ctx = ""
         else:
-            ctx = eureka_context if eureka_context.startswith('/') else "/" + eureka_context
+            ctx = eureka_context if eureka_context.startswith(
+                '/') else "/" + eureka_context
 
         return f"{prtl}://{basic_auth}{url}{ctx}"
 
@@ -780,29 +795,16 @@ class EurekaClient:
                 app_name="python_module_1", 
                 instance_port=9090)
 
-    You can use `do_service`, `do_service_async`, `wall_nodes`, `wall_nodes_async` to call the remote services.
+    You can use `do_service`, `wall_nodes` to call the remote services.
 
     >>> res = eureka_client.do_service("OTHER-SERVICE-NAME", "/service/context/path")
-
-    >>> def success_callabck(data):
-            ...
-
-        def error_callback(error):
-            ...
-
-        client.do_service_async("OTHER-SERVICE-NAME", "/service/context/path", on_success=success_callabck, on_error=error_callback)
 
     >>> def walk_using_your_own_urllib(url):
             ...
 
-        res = client.walk_nodes("OTHER-SERVICE-NAME", "/service/context/path", walker=walk_using_your_own_urllib)
+        res = await client.walk_nodes("OTHER-SERVICE-NAME", "/service/context/path", walker=walk_using_your_own_urllib)
 
-    >>> client.walk_nodes("OTHER-SERVICE-NAME", "/service/context/path",
-                          walker=walk_using_your_own_urllib,
-                          on_success=success_callabck,
-                          on_error=error_callback)
-
-
+    
     Attributes:
 
     * eureka_server: The eureka server url, if you want have deploy a cluster to do the failover, use `,` to separate the urls.
@@ -837,7 +839,7 @@ class EurekaClient:
 
     * instance_id: The id of this instance, if not specified, will generate one by app_name and instance_host/instance_ip and instance_port.
 
-    * instance_host： The host of this instance. 
+    * instance_host: The host of this instance. 
 
     * instance_ip: The ip of this instance. If instance_host and instance_ip are not specified, will try to find the ip via connection to the eureka server.
 
@@ -947,76 +949,34 @@ class EurekaClient:
         self.__prefer_same_zone = prefer_same_zone
         self.__alive = False
         self.__heartbeat_interval = renewal_interval_in_secs
-        self.__heartbeat_timer = Timer(renewal_interval_in_secs, self.__heartbeat)
+        self.__heartbeat_timer = Timer(self.__heartbeat_interval, self.__heartbeat_thread)
         self.__heartbeat_timer.daemon = True
+        
+        self.__instance_id = instance_id
         self.__instance_ip = instance_ip
         self.__instance_ip_network = instance_ip_network
         self.__instance_host = instance_host
+        self.__instance_port = instance_port
+        self.__app_name = app_name
+        self.__instance_unsecure_port_enabled = instance_unsecure_port_enabled
+        self.__instance_secure_port = instance_secure_port
+        self.__instance_secure_port_enabled = instance_secure_port_enabled
+        self.__data_center_name = data_center_name
+        self.__duration_in_secs = duration_in_secs
+        self.__metadata = metadata
+        self.__home_page_url = home_page_url
+        self.__status_page_url = status_page_url
+        self.__health_check_url = health_check_url
+        self.__secure_health_check_url = secure_health_check_url
+        self.__vip_adr = vip_adr
+        self.__secure_vip_addr = secure_vip_addr
+        self.__is_coordinating_discovery_server = is_coordinating_discovery_server
+
         self.__aws_metadata = {}
         self.__on_error_callback = on_error
 
         # For Registery
-        if should_register:
-            if data_center_name == "Amazon":
-                self.__aws_metadata = self.__load_ec2_metadata_dict()
-            if self.__instance_host == "" and self.__instance_ip == "":
-                self.__instance_ip, self.__instance_host = self.__get_ip_host(self.__instance_ip_network)
-            elif self.__instance_host != "" and self.__instance_ip == "":
-                self.__instance_ip = netint.get_ip_by_host(self.__instance_host)
-                if not EurekaClient.__is_ip(self.__instance_ip):
-                    def try_to_get_client_ip(url):
-                        self.__instance_ip = EurekaClient.__get_instance_ip(url)
-                    self.__connect_to_eureka_server(try_to_get_client_ip)
-            elif self.__instance_host == "" and self.__instance_ip != "":
-                self.__instance_host = netint.get_host_by_ip(self.__instance_ip)
-
-            mdata = {
-                'management.port': str(instance_port)
-            }
-            if zone:
-                mdata["zone"] = zone
-            mdata.update(metadata)
-            ins_id = instance_id if instance_id != "" else f"{self.__instance_ip}:{app_name.lower()}:{instance_port}"
-            _logger.debug(f"register instance using id [#{ins_id}]")
-            self.__instance = {
-                'instanceId': ins_id,
-                'hostName': self.__instance_host,
-                'app': app_name.upper(),
-                'ipAddr': self.__instance_ip,
-                'port': {
-                    '$': instance_port,
-                    '@enabled': str(instance_unsecure_port_enabled).lower()
-                },
-                'securePort': {
-                    '$': instance_secure_port,
-                    '@enabled': str(instance_secure_port_enabled).lower()
-                },
-                'countryId': 1,
-                'dataCenterInfo': {
-                    '@class': _AMAZON_DATA_CENTER_INFO_CLASS if data_center_name == "Amazon" else _DEFAULT_DATA_CENTER_INFO_CLASS,
-                    'name': data_center_name
-                },
-                'leaseInfo': {
-                    'renewalIntervalInSecs': renewal_interval_in_secs,
-                    'durationInSecs': duration_in_secs,
-                    'registrationTimestamp': 0,
-                    'lastRenewalTimestamp': 0,
-                    'evictionTimestamp': 0,
-                    'serviceUpTimestamp': 0
-                },
-                'metadata': mdata,
-                'homePageUrl': EurekaClient.__format_url(home_page_url, self.__instance_host, instance_port),
-                'statusPageUrl': EurekaClient.__format_url(status_page_url, self.__instance_host, instance_port, "info"),
-                'healthCheckUrl': EurekaClient.__format_url(health_check_url, self.__instance_host, instance_port, "health"),
-                'secureHealthCheckUrl': secure_health_check_url,
-                'vipAddress': vip_adr if vip_adr != "" else app_name.lower(),
-                'secureVipAddress': secure_vip_addr if secure_vip_addr != "" else app_name.lower(),
-                'isCoordinatingDiscoveryServer': str(is_coordinating_discovery_server).lower()
-            }
-            if data_center_name == "Amazon":
-                self.__instance["dataCenterInfo"]["metadata"] = self.__aws_metadata
-        else:
-            self.__instance = {}
+        self.__instance = {}
 
         # For discovery
         self.__remote_regions = remote_regions if remote_regions is not None else []
@@ -1028,6 +988,68 @@ class EurekaClient:
 
         self.__application_mth_lock = RLock()
 
+    async def __parepare_instance_info(self):
+        if self.__data_center_name == "Amazon":
+            self.__aws_metadata = await self.__load_ec2_metadata_dict()
+        if self.__instance_host == "" and self.__instance_ip == "":
+            self.__instance_ip, self.__instance_host = self.__get_ip_host(
+                self.__instance_ip_network)
+        elif self.__instance_host != "" and self.__instance_ip == "":
+            self.__instance_ip = netint.get_ip_by_host(
+                self.__instance_host)
+            if not EurekaClient.__is_ip(self.__instance_ip):
+                async def try_to_get_client_ip(url):
+                    self.__instance_ip = EurekaClient.__get_instance_ip(url)
+                await self.__connect_to_eureka_server(try_to_get_client_ip)
+        elif self.__instance_host == "" and self.__instance_ip != "":
+            self.__instance_host = netint.get_host_by_ip(self.__instance_ip)
+
+        mdata = {
+            'management.port': str(self.__instance_port)
+        }
+        if self.__eureka_server_conf.zone:
+            mdata["zone"] = self.__eureka_server_conf.zone
+        mdata.update(self.__metadata)
+        ins_id = self.__instance_id or f"{self.__instance_ip}:{self.__app_name.lower()}:{self.__instance_port}"
+        _logger.debug(f"register instance using id [#{ins_id}]")
+        self.__instance = {
+            'instanceId': ins_id,
+            'hostName': self.__instance_host,
+            'app': self.__app_name.upper(),
+            'ipAddr': self.__instance_ip,
+            'port': {
+                '$': self.__instance_port,
+                '@enabled': str(self.__instance_unsecure_port_enabled).lower()
+            },
+            'securePort': {
+                '$': self.__instance_secure_port,
+                '@enabled': str(self.__instance_secure_port_enabled).lower()
+            },
+            'countryId': 1,
+            'dataCenterInfo': {
+                '@class': _AMAZON_DATA_CENTER_INFO_CLASS if self.__data_center_name == "Amazon" else _DEFAULT_DATA_CENTER_INFO_CLASS,
+                'name': self.__data_center_name
+            },
+            'leaseInfo': {
+                'renewalIntervalInSecs': self.__heartbeat_interval,
+                'durationInSecs': self.__duration_in_secs,
+                'registrationTimestamp': 0,
+                'lastRenewalTimestamp': 0,
+                'evictionTimestamp': 0,
+                'serviceUpTimestamp': 0
+            },
+            'metadata': mdata,
+            'homePageUrl': EurekaClient.__format_url(self.__home_page_url, self.__instance_host, self.__instance_port),
+            'statusPageUrl': EurekaClient.__format_url(self.__status_page_url, self.__instance_host, self.__instance_port, "info"),
+            'healthCheckUrl': EurekaClient.__format_url(self.__health_check_url, self.__instance_host, self.__instance_port, "health"),
+            'secureHealthCheckUrl': self.__secure_health_check_url,
+            'vipAddress': self.__vip_adr or self.__app_name.lower(),
+            'secureVipAddress': self.__secure_vip_addr or self.__app_name.lower(),
+            'isCoordinatingDiscoveryServer': str(self.__is_coordinating_discovery_server).lower()
+        }
+        if self.__data_center_name == "Amazon":
+            self.__instance["dataCenterInfo"]["metadata"] = self.__aws_metadata
+
     def __get_ip_host(self, network):
         ip, host = netint.get_ip_and_host(network)
         if self.__aws_metadata and "local-ipv4" in self.__aws_metadata and self.__aws_metadata["local-ipv4"]:
@@ -1036,12 +1058,13 @@ class EurekaClient:
             host = self.__aws_metadata["local-hostname"]
         return ip, host
 
-    def __load_ec2_metadata_dict(self):
+    async def __load_ec2_metadata_dict(self):
         # instance metadata
         amazon_info = AmazonInfo()
-        mac = amazon_info.get_ec2_metadata('mac')
+        mac = await amazon_info.get_ec2_metadata('mac')
         if mac:
-            vpc_id = amazon_info.get_ec2_metadata(f'network/interfaces/macs/{mac}/vpc-id')
+            vpc_id = await amazon_info.get_ec2_metadata(
+                f'network/interfaces/macs/{mac}/vpc-id')
         else:
             vpc_id = ""
         metadata = {
@@ -1057,7 +1080,7 @@ class EurekaClient:
             'vpcId': vpc_id
         }
         # accountId
-        doc = amazon_info.get_instance_identity_document()
+        doc = await amazon_info.get_instance_identity_document()
         if doc and "accountId" in doc:
             metadata["accountId"] = doc["accountId"]
         return metadata
@@ -1077,74 +1100,86 @@ class EurekaClient:
     @property
     def applications(self) -> Applications:
         if not self.should_discover:
-            raise DiscoverException("should_discover set to False, no registry is pulled, cannot find any applications.")
+            raise DiscoverException(
+                "should_discover set to False, no registry is pulled, cannot find any applications.")
         with self.__application_mth_lock:
             if self.__applications is None:
                 self.__pull_full_registry()
             return self.__applications
 
-    def __try_eureka_server_in_cache(self, fun):
+    async def __try_eureka_server_in_cache(self, fun):
         ok = False
         invalid_keys = []
         for z, url in self.__cache_eureka_url.items():
             try:
-                _logger.debug(f"Try to do {fun.__name__} in zone[{z}] using cached url {url}. ")
-                fun(url)
+                _logger.debug(
+                    f"Try to do {fun.__name__} in zone[{z}] using cached url {url}. ")
+                await fun(url)
             except (http_client.HTTPError, http_client.URLError):
-                _logger.warn(f"Eureka server [{url}] is down, use next url to try.", exc_info=True)
+                _logger.warn(
+                    f"Eureka server [{url}] is down, use next url to try.", exc_info=True)
                 invalid_keys.append(z)
             else:
                 ok = True
         if invalid_keys:
-            _logger.debug(f"Invalid keys::{invalid_keys} will be removed from cache.")
+            _logger.debug(
+                f"Invalid keys::{invalid_keys} will be removed from cache.")
             for z in invalid_keys:
                 del self.__cache_eureka_url[z]
         if not ok:
-            raise EurekaServerConnectionException("All eureka servers in cache are down!")
+            raise EurekaServerConnectionException(
+                "All eureka servers in cache are down!")
 
-    def __try_eureka_server_in_zone(self, fun):
-        self.__try_eureka_servers_in_list(fun, self.__eureka_server_conf.servers_in_zone, self.zone)
+    async def __try_eureka_server_in_zone(self, fun):
+        await self.__try_eureka_servers_in_list(
+            fun, self.__eureka_server_conf.servers_in_zone, self.zone)
 
-    def __try_eureka_server_not_in_zone(self, fun):
+    async def __try_eureka_server_not_in_zone(self, fun):
         for zone, urls in self.__eureka_server_conf.servers_not_in_zone.items():
             try:
-                self.__try_eureka_servers_in_list(fun, urls, zone)
+                await self.__try_eureka_servers_in_list(fun, urls, zone)
             except EurekaServerConnectionException:
-                _logger.warn(f"try eureka servers in zone[{zone}] error!", exc_info=True)
+                _logger.warn(
+                    f"try eureka servers in zone[{zone}] error!", exc_info=True)
             else:
                 return
-        raise EurekaServerConnectionException("All eureka servers in all zone are down!")
+        raise EurekaServerConnectionException(
+            "All eureka servers in all zone are down!")
 
-    def __try_eureka_server_regardless_zones(self, fun):
+    async def __try_eureka_server_regardless_zones(self, fun):
         for zone, urls in self.__eureka_server_conf.servers.items():
             try:
-                self.__try_eureka_servers_in_list(fun, urls, zone)
+                await self.__try_eureka_servers_in_list(fun, urls, zone)
             except EurekaServerConnectionException:
-                _logger.warn(f"try eureka servers in zone[{zone}] error!", exc_info=True)
+                _logger.warn(
+                    f"try eureka servers in zone[{zone}] error!", exc_info=True)
             else:
                 return
-        raise EurekaServerConnectionException("All eureka servers in all zone are down!")
+        raise EurekaServerConnectionException(
+            "All eureka servers in all zone are down!")
 
-    def __try_all_eureka_servers(self, fun):
+    async def __try_all_eureka_servers(self, fun):
         if self.__prefer_same_zone:
             try:
-                self.__try_eureka_server_in_zone(fun)
+                await self.__try_eureka_server_in_zone(fun)
             except EurekaServerConnectionException:
-                self.__try_eureka_server_not_in_zone(fun)
+                await self.__try_eureka_server_not_in_zone(fun)
         else:
-            self.__try_eureka_server_regardless_zones(fun)
+            await self.__try_eureka_server_regardless_zones(fun)
 
-    def __try_eureka_servers_in_list(self, fun, eureka_servers=[], zone=_DEFAUTL_ZONE):
+    async def __try_eureka_servers_in_list(self, fun, eureka_servers=[], zone=_DEFAUTL_ZONE):
         with self.__net_lock:
             ok = False
             _zone = zone if zone else _DEFAUTL_ZONE
             for url in eureka_servers:
                 url = url.strip()
                 try:
-                    _logger.debug(f"try to do {fun.__name__} in zone[{_zone}] using url {url}. ")
-                    fun(url)
+                    _logger.debug(
+                        f"try to do {fun.__name__} in zone[{_zone}] using url {url}. ")
+                    await fun(url)
                 except (http_client.HTTPError, http_client.URLError):
-                    _logger.warn(f"Eureka server [{url}] is down, use next url to try.", exc_info=True)
+                    _logger.warn(
+                        f"Eureka server [{url}] is down, use next url to try.", exc_info=True)
                 else:
                     ok = True
                     self.__cache_eureka_url[_zone] = url
@@ -1153,19 +1188,20 @@ class EurekaClient:
             if not ok:
                 if _zone in self.__cache_eureka_url:
                     del self.__cache_eureka_url[_zone]
-                raise EurekaServerConnectionException(f"All eureka servers in zone[{_zone}] are down!")
+                raise EurekaServerConnectionException(
+                    f"All eureka servers in zone[{_zone}] are down!")
 
-    def __connect_to_eureka_server(self, fun):
+    async def __connect_to_eureka_server(self, fun):
         if self.__cache_eureka_url:
             try:
-                self.__try_eureka_server_in_cache(fun)
+                await self.__try_eureka_server_in_cache(fun)
             except EurekaServerConnectionException:
-                self.__try_all_eureka_servers(fun)
+                await self.__try_all_eureka_servers(fun)
         else:
-            self.__try_all_eureka_servers(fun)
+            await self.__try_all_eureka_servers(fun)
 
     @staticmethod
-    def __format_url(url, host, port, defalut_ctx=""):
+    def __format_url(url: str, host: str, port: str, defalut_ctx=""):
         if url != "":
             if url.startswith('http'):
                 _url = url
@@ -1204,110 +1240,125 @@ class EurekaClient:
         s.close()
         return ip
 
-    def _on_error(self, error_type: str, exception: Exception):
-        if self.__on_error_callback and callable(self.__on_error_callback):
-            self.__on_error_callback(error_type, exception)
+    async def _on_error(self, error_type: str, exception: Exception):
+        if self.__on_error_callback:
+            if asyncio.iscoroutine(self.__on_error_callback):
+                await self.__on_error_callback(error_type, exception)
+            elif callable(self.__on_error_callback):
+                self.__on_error_callback(error_type, exception)
 
-    def register(self, status: str = INSTANCE_STATUS_UP, overriddenstatus: str = INSTANCE_STATUS_UNKNOWN) -> None:
+    async def register(self, status: str = INSTANCE_STATUS_UP, overriddenstatus: str = INSTANCE_STATUS_UNKNOWN) -> None:
         self.__instance["status"] = status
         self.__instance["overriddenstatus"] = overriddenstatus
         self.__instance["lastUpdatedTimestamp"] = str(_current_time_millis())
         self.__instance["lastDirtyTimestamp"] = str(_current_time_millis())
         try:
-            def do_register(url):
-                _register(url, self.__instance)
-            self.__connect_to_eureka_server(do_register)
+            async def do_register(url):
+                await _register(url, self.__instance)
+            await self.__connect_to_eureka_server(do_register)
         except Exception as e:
             self.__alive = False
-            _logger.warn("Register error! Will try in next heartbeat. ", exc_info=True)
-            self._on_error(ERROR_REGISTER, e)
+            _logger.warn(
+                "Register error! Will try in next heartbeat. ", exc_info=True)
+            await self._on_error(ERROR_REGISTER, e)
         else:
             _logger.debug("register successfully!")
             self.__alive = True
 
-    def cancel(self) -> None:
+    async def cancel(self) -> None:
         try:
-            def do_cancel(url):
-                cancel(url, self.__instance["app"], self.__instance["instanceId"])
-            self.__connect_to_eureka_server(do_cancel)
+            async def do_cancel(url):
+                await cancel(url, self.__instance["app"],
+                             self.__instance["instanceId"])
+            await self.__connect_to_eureka_server(do_cancel)
         except Exception as e:
             _logger.warn("Cancel error!", exc_info=True)
-            self._on_error(ERROR_STATUS_UPDATE, e)
+            await self._on_error(ERROR_STATUS_UPDATE, e)
         else:
             self.__alive = False
 
-    def send_heartbeat(self, overridden_status: str = "") -> None:
+    async def send_heartbeat(self, overridden_status: str = "") -> None:
         if not self.__alive:
-            self.register()
+            await self.register()
             return
         try:
             _logger.debug("sending heartbeat to eureka server. ")
 
-            def do_send_heartbeat(url):
-                send_heartbeat(url, self.__instance["app"],
-                               self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"],
-                               status=self.__instance["status"], overriddenstatus=overridden_status)
-            self.__connect_to_eureka_server(do_send_heartbeat)
+            async def do_send_heartbeat(url):
+                await send_heartbeat(url, self.__instance["app"],
+                                     self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"],
+                                     status=self.__instance["status"], overriddenstatus=overridden_status)
+            await self.__connect_to_eureka_server(do_send_heartbeat)
         except Exception as e:
-            _logger.warn("Cannot send heartbeat to server, try to register. ", exc_info=True)
-            self._on_error(ERROR_STATUS_UPDATE, e)
-            self.register()
+            _logger.warn(
+                "Cannot send heartbeat to server, try to register. ", exc_info=True)
+            await self._on_error(ERROR_STATUS_UPDATE, e)
+            await self.register()
 
-    def status_update(self, new_status: str) -> None:
+    async def status_update(self, new_status: str) -> None:
         self.__instance["status"] = new_status
         try:
-            def do_status_update(url):
-                status_update(url, self.__instance["app"], self.__instance["instanceId"],
-                              self.__instance["lastDirtyTimestamp"], new_status)
-            self.__connect_to_eureka_server(do_status_update)
+            async def do_status_update(url):
+                await status_update(url, self.__instance["app"], self.__instance["instanceId"],
+                                    self.__instance["lastDirtyTimestamp"], new_status)
+            await self.__connect_to_eureka_server(do_status_update)
         except Exception as e:
             _logger.warn("update status error!", exc_info=True)
-            self._on_error(ERROR_STATUS_UPDATE, e)
+            await self._on_error(ERROR_STATUS_UPDATE, e)
 
-    def delete_status_override(self) -> None:
+    async def delete_status_override(self) -> None:
         try:
-            self.__connect_to_eureka_server(lambda url: delete_status_override(
-                url, self.__instance["app"], self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"]))
+            async def do_delete_status_override(url):
+                await delete_status_override(
+                    url, self.__instance["app"], self.__instance["instanceId"], self.__instance["lastDirtyTimestamp"])
+            await self.__connect_to_eureka_server(do_delete_status_override)
         except Exception as e:
             _logger.warn("delete status overrid error!", exc_info=True)
-            self._on_error(ERROR_STATUS_UPDATE, e)
+            await self._on_error(ERROR_STATUS_UPDATE, e)
 
-    def __start_register(self):
+    async def __start_register(self):
         _logger.debug("start to registry client...")
-        self.register()
+        await self.register()
 
-    def __stop_registery(self):
+    async def __stop_registery(self):
         if self.__alive:
-            self.register(status=INSTANCE_STATUS_DOWN)
-            self.cancel()
+            await self.register(status=INSTANCE_STATUS_DOWN)
+            await self.cancel()
 
-    def __heartbeat(self):
+    def __heartbeat_thread(self):
+        _logger.debug("Start heartbeat!")
+        loop = asyncio.new_event_loop()
         while True:
-            if self.__should_register:
-                _logger.debug("sending heartbeat to eureka server ")
-                self.send_heartbeat()
-            if self.__should_discover:
-                _logger.debug("loading services from  eureka server")
-                self.__fetch_delta()
+            loop.run_until_complete(self.__heartbeat())
             time.sleep(self.__heartbeat_interval)
 
-    def __pull_full_registry(self):
-        def do_pull(url):  # the actual function body
-            self.__applications = get_applications(url, self.__remote_regions)
+    async def __heartbeat(self):
+        if self.__should_register:
+            _logger.debug("sending heartbeat to eureka server ")
+            await self.send_heartbeat()
+        if self.__should_discover:
+            _logger.debug("loading services from  eureka server")
+            await self.__fetch_delta()
+
+    async def __pull_full_registry(self):
+        async def do_pull(url):  # the actual function body
+            self.__applications = await get_applications(url, self.__remote_regions)
             self.__delta = self.__applications
         try:
-            self.__connect_to_eureka_server(do_pull)
+            await self.__connect_to_eureka_server(do_pull)
         except Exception as e:
-            _logger.warn("pull full registry from eureka server error!", exc_info=True)
-            self._on_error(ERROR_DISCOVER, e)
+            _logger.warn(
+                "pull full registry from eureka server error!", exc_info=True)
+            await self._on_error(ERROR_DISCOVER, e)
 
-    def __fetch_delta(self):
-        def do_fetch(url):
+    async def __fetch_delta(self):
+        async def do_fetch(url):
             if self.__applications is None or len(self.__applications.applications) == 0:
-                self.__pull_full_registry()
+                await self.__pull_full_registry()
                 return
-            delta = get_delta(url, self.__remote_regions)
-            _logger.debug(f"delta got: v.{delta.versionsDelta}::{delta.appsHashcode}")
+            delta = await get_delta(url, self.__remote_regions)
+            _logger.debug(
+                f"delta got: v.{delta.versionsDelta}::{delta.appsHashcode}")
             if self.__delta is not None \
                     and delta.versionsDelta == self.__delta.versionsDelta \
                     and delta.appsHashcode == self.__delta.appsHashcode:
@@ -1315,31 +1366,37 @@ class EurekaClient:
             self.__merge_delta(delta)
             self.__delta = delta
             if not self.__is_hash_match():
-                self.__pull_full_registry()
+                await self.__pull_full_registry()
         try:
-            self.__connect_to_eureka_server(do_fetch)
+            await self.__connect_to_eureka_server(do_fetch)
         except Exception as e:
-            _logger.warn("fetch delta from eureka server error!", exc_info=True)
-            self._on_error(ERROR_DISCOVER, e)
+            _logger.warn(
+                "fetch delta from eureka server error!", exc_info=True)
+            await self._on_error(ERROR_DISCOVER, e)
 
     def __is_hash_match(self):
         app_hash = self.__get_applications_hash()
-        _logger.debug(f"check hash, local[{app_hash}], remote[{self.__delta.appsHashcode}]")
+        _logger.debug(
+            f"check hash, local[{app_hash}], remote[{self.__delta.appsHashcode}]")
         return app_hash == self.__delta.appsHashcode
 
     def __merge_delta(self, delta):
-        _logger.debug(f"merge delta...length of application got from delta::{len(delta.applications)}")
+        _logger.debug(
+            f"merge delta...length of application got from delta::{len(delta.applications)}")
         for application in delta.applications:
             for instance in application.instances:
-                _logger.debug(f"instance [{instance.instanceId}] has {instance.actionType}")
+                _logger.debug(
+                    f"instance [{instance.instanceId}] has {instance.actionType}")
                 if instance.actionType in (ACTION_TYPE_ADDED, ACTION_TYPE_MODIFIED):
-                    existingApp = self.applications.get_application(application.name)
+                    existingApp = self.applications.get_application(
+                        application.name)
                     if existingApp is None:
                         self.applications.add_application(application)
                     else:
                         existingApp.update_instance(instance)
                 elif instance.actionType == ACTION_TYPE_DELETED:
-                    existingApp = self.applications.get_application(application.name)
+                    existingApp = self.applications.get_application(
+                        application.name)
                     if existingApp is None:
                         self.applications.add_application(application)
                     existingApp.remove_instance(instance)
@@ -1351,99 +1408,63 @@ class EurekaClient:
             for instance in application.instances:
                 if instance.status not in app_status_count:
                     app_status_count[instance.status.upper()] = 0
-                app_status_count[instance.status.upper()] = app_status_count[instance.status.upper()] + 1
+                app_status_count[instance.status.upper(
+                )] = app_status_count[instance.status.upper()] + 1
 
-        sorted_app_status_count = sorted(app_status_count.items(), key=lambda item: item[0])
+        sorted_app_status_count = sorted(
+            app_status_count.items(), key=lambda item: item[0])
         for item in sorted_app_status_count:
             app_hash = f"{app_hash}{item[0]}_{item[1]}_"
         return app_hash
 
-    def walk_nodes_async(self,
+    async def walk_nodes(self,
                          app_name: str = "",
                          service: str = "",
                          prefer_ip: bool = False,
                          prefer_https: bool = False,
-                         walker: Callable = None,
-                         on_success: Callable = None,
-                         on_error: Callable = None) -> None:
-        def async_thread_target():
-            try:
-                res = self.walk_nodes(app_name=app_name, service=service, prefer_ip=prefer_ip, prefer_https=prefer_https, walker=walker)
-                if on_success is not None and (inspect.isfunction(on_success) or inspect.ismethod(on_success)):
-                    on_success(res)
-            except http_client.HTTPError as e:
-                if on_error is not None and (inspect.isfunction(on_error) or inspect.ismethod(on_error)):
-                    on_error(e)
-
-        async_thread = Thread(target=async_thread_target)
-        async_thread.daemon = True
-        async_thread.start()
-
-    def walk_nodes(self,
-                   app_name: str = "",
-                   service: str = "",
-                   prefer_ip: bool = False,
-                   prefer_https: bool = False,
-                   walker: Callable = None) -> Union[str, Dict, http_client.HTTPResponse]:
+                         walker: Callable = None) -> Union[str, Dict, http_client.HttpResponse]:
         assert app_name is not None and app_name != "", "application_name should not be null"
-        assert inspect.isfunction(walker) or inspect.ismethod(walker), "walker must be a method or function"
+
         error_nodes = []
         app_name = app_name.upper()
         node = self.__get_available_service(app_name)
 
         while node is not None:
             try:
-                url = self.__generate_service_url(node, prefer_ip, prefer_https)
+                url = self.__generate_service_url(
+                    node, prefer_ip, prefer_https)
                 if service.startswith("/"):
                     url = url + service[1:]
                 else:
                     url = url + service
                 _logger.debug("do service with url::" + url)
-                return walker(url)
+                obj = walker(url)
+                if asyncio.iscoroutine(obj):
+                    return await obj
+                else:
+                    return obj
             except (ConnectionError, TimeoutError, socket.timeout) as e:
-                _logger.warning(f"do service {service} in node [{node.instanceId}] error, use next node. Error: {e}")
+                _logger.warning(
+                    f"do service {service} in node [{node.instanceId}] error, use next node. Error: {e}")
                 error_nodes.append(node.instanceId)
                 node = self.__get_available_service(app_name, error_nodes)
             except (http_client.HTTPError, http_client.URLError) as e:
                 if self.__strict_service_error_policy:
-                    _logger.warning(f"do service {service} in node [{node.instanceId}] error, use next node. Error: {e}")
+                    _logger.warning(
+                        f"do service {service} in node [{node.instanceId}] error, use next node. Error: {e}")
                     error_nodes.append(node.instanceId)
                     node = self.__get_available_service(app_name, error_nodes)
                 else:
                     raise e
 
-        raise http_client.URLError("Try all up instances in registry, but all fail")
+        raise http_client.URLError(
+            "Try all up instances in registry, but all fail")
 
-    def do_service_async(self, app_name: str = "", service: str = "", return_type: str = "string",
+    async def do_service(self, app_name: str = "", service: str = "", return_type: str = "string",
                          prefer_ip: bool = False, prefer_https: bool = False,
-                         on_success: Callable = None, on_error: Callable = None,
                          method: str = "GET", headers: Dict[str, str] = None,
-                         data: Union[bytes, str, Dict] = None, timeout: float = _DEFAULT_TIME_OUT,
-                         cafile: str = None, capath: str = None, cadefault: bool = False, context: ssl.SSLContext = None) -> None:
-        def async_thread_target():
-            try:
-                res = self.do_service(app_name=app_name,
-                                      service=service, return_type=return_type,
-                                      prefer_ip=prefer_ip, prefer_https=prefer_https,
-                                      method=method, headers=headers,
-                                      data=data, timeout=timeout,
-                                      cafile=cafile, capath=capath,
-                                      cadefault=cadefault, context=context)
-                if on_success is not None and (inspect.isfunction(on_success) or inspect.ismethod(on_success)):
-                    on_success(res)
-            except http_client.HTTPError as e:
-                if on_error is not None and (inspect.isfunction(on_error) or inspect.ismethod(on_error)):
-                    on_error(e)
-
-        async_thread = Thread(target=async_thread_target)
-        async_thread.daemon = True
-        async_thread.start()
-
-    def do_service(self, app_name: str = "", service: str = "", return_type: str = "string",
-                   prefer_ip: bool = False, prefer_https: bool = False,
-                   method: str = "GET", headers: Dict[str, str] = None,
-                   data: Union[bytes, str, Dict] = None, timeout: float = _DEFAULT_TIME_OUT,
-                   cafile: str = None, capath: str = None, cadefault: bool = False, context: ssl.SSLContext = None) -> Union[str, Dict, http_client.HTTPResponse]:
+                         data: Union[bytes, str, Dict] = None, timeout: float = _DEFAULT_TIME_OUT
+                         ) -> Union[str, Dict, http_client.HttpResponse]:
         if data and isinstance(data, dict):
             _data = json.dumps(data).encode()
         elif data and isinstance(data, str):
@@ -1451,20 +1472,18 @@ class EurekaClient:
         else:
             _data = data
 
-        def walk_using_urllib(url):
-            req = http_client.Request(url, method=method)
-            heads = headers if headers is not None else {}
-            for k, v in heads.items():
-                req.add_header(k, v)
+        async def walk_using_urllib(url):
+            req = http_client.HttpRequest(url, method=method, headers=headers)
 
-            res_txt, res = http_client.load(req, data=_data, timeout=timeout, cafile=cafile, capath=capath, cadefault=cadefault, context=context)
+            res: http_client.HttpResponse = await http_client.http_client.urlopen(
+                req, data=_data, timeout=timeout)
             if return_type.lower() in ("json", "dict", "dictionary"):
-                return json.loads(res_txt)
+                return json.loads(res.body_text)
             elif return_type.lower() == "response_object":
-                return res
+                return res.response
             else:
-                return res_txt
-        return self.walk_nodes(app_name, service, prefer_ip, prefer_https, walk_using_urllib)
+                return res.body_text
+        return await self.walk_nodes(app_name, service, prefer_ip, prefer_https, walk_using_urllib)
 
     def __get_service_not_in_ignore_list(self, instances, ignores):
         ign = ignores if ignores else []
@@ -1473,21 +1492,25 @@ class EurekaClient:
     def __get_available_service(self, application_name, ignore_instance_ids=None):
         apps = self.applications
         if not apps:
-            raise DiscoverException("Cannot load registry from eureka server, please check your configurations. ")
+            raise DiscoverException(
+                "Cannot load registry from eureka server, please check your configurations. ")
         app = apps.get_application(application_name)
         if app is None:
             return None
         up_instances = []
         if self.__prefer_same_zone:
             ups_same_zone = app.up_instances_in_zone(self.zone)
-            up_instances = self.__get_service_not_in_ignore_list(ups_same_zone, ignore_instance_ids)
+            up_instances = self.__get_service_not_in_ignore_list(
+                ups_same_zone, ignore_instance_ids)
             if not up_instances:
                 ups_not_same_zone = app.up_instances_not_in_zone(self.zone)
                 _logger.debug(
                     f"app[{application_name}]'s up instances not in same zone are all down, using the one that's not in the same zone: {[ins.instanceId for ins in ups_not_same_zone]}")
-                up_instances = self.__get_service_not_in_ignore_list(ups_not_same_zone, ignore_instance_ids)
+                up_instances = self.__get_service_not_in_ignore_list(
+                    ups_not_same_zone, ignore_instance_ids)
         else:
-            up_instances = self.__get_service_not_in_ignore_list(app.up_instances, ignore_instance_ids)
+            up_instances = self.__get_service_not_in_ignore_list(
+                app.up_instances, ignore_instance_ids)
 
         if len(up_instances) == 0:
             # no up instances
@@ -1560,64 +1583,65 @@ class EurekaClient:
         else:
             return f"{schema}://{host}:{port}/"
 
-    def __start_discover(self):
-        self.__pull_full_registry()
+    async def __start_discover(self):
+        await self.__pull_full_registry()
 
-    def start(self) -> None:
+    async def start(self) -> None:
         if self.should_register:
-            self.__start_register()
+            await self.__parepare_instance_info()
+            await self.__start_register()
         if self.should_discover:
-            self.__start_discover()
+            await self.__start_discover()
         self.__heartbeat_timer.start()
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         if self.__heartbeat_timer.is_alive():
             self.__heartbeat_timer.cancel()
         if self.__should_register:
-            self.__stop_registery()
+            await self.__stop_registery()
 
 
 __cache_key = "default"
-__cache_clients = {}
+__cache_clients: Dict[str, EurekaClient] = {}
 __cache_clients_lock = RLock()
 
 
-def init(eureka_server: str = _DEFAULT_EUREKA_SERVER_URL,
-         eureka_domain: str = "",
-         region: str = "",
-         zone: str = "",
-         eureka_availability_zones: Dict[str, str] = {},
-         eureka_protocol: str = "http",
-         eureka_basic_auth_user: str = "",
-         eureka_basic_auth_password: str = "",
-         eureka_context: str = "/eureka",
-         prefer_same_zone: bool = True,
-         should_register: bool = True,
-         should_discover: bool = True,
-         on_error: Callable = None,
-         app_name: str = "",
-         instance_id: str = "",
-         instance_host: str = "",
-         instance_ip: str = "",
-         instance_ip_network: str = "",
-         instance_port: int = _DEFAULT_INSTNACE_PORT,
-         instance_unsecure_port_enabled: bool = True,
-         instance_secure_port: int = _DEFAULT_INSTNACE_SECURE_PORT,
-         instance_secure_port_enabled: bool = False,
-         data_center_name: str = _DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
-         renewal_interval_in_secs: int = _RENEWAL_INTERVAL_IN_SECS,
-         duration_in_secs: int = _DURATION_IN_SECS,
-         home_page_url: str = "",
-         status_page_url: str = "",
-         health_check_url: str = "",
-         secure_health_check_url: str = "",
-         vip_adr: str = "",
-         secure_vip_addr: str = "",
-         is_coordinating_discovery_server: bool = False,
-         metadata: Dict = {},
-         remote_regions: List[str] = [],
-         ha_strategy: int = HA_STRATEGY_RANDOM,
-         strict_service_error_policy: bool = True) -> EurekaClient:
+async def init(eureka_server: str = _DEFAULT_EUREKA_SERVER_URL,
+               eureka_domain: str = "",
+               region: str = "",
+               zone: str = "",
+               eureka_availability_zones: Dict[str, str] = {},
+               eureka_protocol: str = "http",
+               eureka_basic_auth_user: str = "",
+               eureka_basic_auth_password: str = "",
+               eureka_context: str = "/eureka",
+               prefer_same_zone: bool = True,
+               should_register: bool = True,
+               should_discover: bool = True,
+               on_error: Callable = None,
+               app_name: str = "",
+               instance_id: str = "",
+               instance_host: str = "",
+               instance_ip: str = "",
+               instance_ip_network: str = "",
+               instance_port: int = _DEFAULT_INSTNACE_PORT,
+               instance_unsecure_port_enabled: bool = True,
+               instance_secure_port: int = _DEFAULT_INSTNACE_SECURE_PORT,
+               instance_secure_port_enabled: bool = False,
+               data_center_name: str = _DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
+               renewal_interval_in_secs: int = _RENEWAL_INTERVAL_IN_SECS,
+               duration_in_secs: int = _DURATION_IN_SECS,
+               home_page_url: str = "",
+               status_page_url: str = "",
+               health_check_url: str = "",
+               secure_health_check_url: str = "",
+               vip_adr: str = "",
+               secure_vip_addr: str = "",
+               is_coordinating_discovery_server: bool = False,
+               metadata: Dict = {},
+               remote_regions: List[str] = [],
+               ha_strategy: int = HA_STRATEGY_RANDOM,
+               strict_service_error_policy: bool = True) -> EurekaClient:
     """
     Initialize an EurekaClient object and put it to cache, you can use a set of functions to do the service.
 
@@ -1628,7 +1652,8 @@ def init(eureka_server: str = _DEFAULT_EUREKA_SERVER_URL,
     """
     with __cache_clients_lock:
         if __cache_key in __cache_clients:
-            _logger.warn("A client is already running, try to stop it and start the new one!")
+            _logger.warn(
+                "A client is already running, try to stop it and start the new one!")
             __cache_clients[__cache_key].stop()
             del __cache_clients[__cache_key]
         client = EurekaClient(eureka_server=eureka_server,
@@ -1668,7 +1693,7 @@ def init(eureka_server: str = _DEFAULT_EUREKA_SERVER_URL,
                               ha_strategy=ha_strategy,
                               strict_service_error_policy=strict_service_error_policy)
         __cache_clients[__cache_key] = client
-        client.start()
+        await client.start()
         return client
 
 
@@ -1680,77 +1705,36 @@ def get_client() -> EurekaClient:
             return None
 
 
-def walk_nodes_async(app_name: str = "",
+async def walk_nodes(app_name: str = "",
                      service: str = "",
                      prefer_ip: bool = False,
                      prefer_https: bool = False,
-                     walker: Callable = None,
-                     on_success: Callable = None,
-                     on_error: Callable = None) -> None:
+                     walker: Callable = None) -> Union[str, Dict, http_client.HttpResponse]:
     cli = get_client()
     if cli is None:
         raise Exception("Discovery Client has not initialized. ")
-    cli.walk_nodes_async(app_name=app_name, service=service,
-                         prefer_ip=prefer_ip, prefer_https=prefer_https,
-                         walker=walker, on_success=on_success, on_error=on_error)
+    res = await cli.walk_nodes(app_name=app_name, service=service,
+                               prefer_ip=prefer_ip, prefer_https=prefer_https, walker=walker)
+    return res
 
 
-def walk_nodes(app_name: str = "",
-               service: str = "",
-               prefer_ip: bool = False,
-               prefer_https: bool = False,
-               walker: Callable = None) -> Union[str, Dict, http_client.HTTPResponse]:
-    cli = get_client()
-    if cli is None:
-        raise Exception("Discovery Client has not initialized. ")
-    return cli.walk_nodes(app_name=app_name, service=service,
-                          prefer_ip=prefer_ip, prefer_https=prefer_https, walker=walker)
-
-
-def do_service_async(app_name: str = "", service: str = "", return_type: str = "string",
+async def do_service(app_name: str = "", service: str = "", return_type: str = "string",
                      prefer_ip: bool = False, prefer_https: bool = False,
-                     on_success: Callable = None, on_error: Callable = None,
                      method: str = "GET", headers: Dict[str, str] = None,
-                     data: Union[bytes, str, Dict] = None, timeout: float = _DEFAULT_TIME_OUT,
-                     cafile: str = None, capath: str = None, cadefault: bool = False, context: ssl.SSLContext = None) -> None:
+                     data: Union[bytes, str, Dict] = None, timeout: float = _DEFAULT_TIME_OUT
+                     ) -> Union[str, Dict, http_client.HttpResponse]:
     cli = get_client()
     if cli is None:
         raise Exception("Discovery Client has not initialized. ")
-    cli.do_service_async(app_name=app_name, service=service, return_type=return_type,
-                         prefer_ip=prefer_ip, prefer_https=prefer_https,
-                         on_success=on_success, on_error=on_error,
-                         method=method, headers=headers,
-                         data=data, timeout=timeout,
-                         cafile=cafile, capath=capath,
-                         cadefault=cadefault, context=context)
+    res = await cli.do_service(app_name=app_name, service=service, return_type=return_type,
+                               prefer_ip=prefer_ip, prefer_https=prefer_https,
+                               method=method, headers=headers,
+                               data=data, timeout=timeout)
+
+    return res
 
 
-def do_service(app_name: str = "", service: str = "", return_type: str = "string",
-               prefer_ip: bool = False, prefer_https: bool = False,
-               method: str = "GET", headers: Dict[str, str] = None,
-               data: Union[bytes, str, Dict] = None, timeout: float = _DEFAULT_TIME_OUT,
-               cafile: str = None, capath: str = None, cadefault: bool = False, context: ssl.SSLContext = None) -> Union[str, Dict, http_client.HTTPResponse]:
-    cli = get_client()
-    if cli is None:
-        raise Exception("Discovery Client has not initialized. ")
-    return cli.do_service(app_name=app_name, service=service, return_type=return_type,
-                          prefer_ip=prefer_ip, prefer_https=prefer_https,
-                          method=method, headers=headers,
-                          data=data, timeout=timeout,
-                          cafile=cafile, capath=capath,
-                          cadefault=cadefault, context=context)
-
-
-def stop() -> None:
+async def stop() -> None:
     client = get_client()
     if client is not None:
-        client.stop()
-
-
-@atexit.register
-def _cleanup_before_exist():
-    if len(__cache_clients) > 0:
-        _logger.debug("cleaning up clients")
-        for k, cli in __cache_clients.items():
-            _logger.debug(f"try to stop cache client [{k}] this will also unregister this client from the eureka server")
-            cli.stop()
+        await client.stop()
