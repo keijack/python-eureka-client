@@ -60,16 +60,17 @@ You can also use the `EurekaClient` class.
 ```python
 from py_eureka_client.eureka_client import EurekaClient
 client = EurekaClient(eureka_server="http://my_eureka_server_peer_1/eureka/v2,http://my_eureka_server_peer_2/eureka/v2", app_name="python_module_1", instance_port=9090)
-client.start()
-res = client.do_service("OTHER-SERVICE-NAME", "/service/context/path")
+await client.start()
+res = await client.do_service("OTHER-SERVICE-NAME", "/service/context/path")
 print("result of other service" + res)
 # when server is shutted down:
-client.stop()
+await client.stop()
 ```
 
-In fact, the `init` function is a facade of the EurekaClient, it holds a client object behind, you can get that by catching its return value or use `eureka_client.get_client()` to get it. The `init` function will automatically start and stop the client while using raw `EurekaClient`, you must call the `start()` and `stop()` method explicitly. 
+In fact, the `init` function is a facade of the EurekaClient, it holds a client object behind, you can get that by catching its return value or use `eureka_client.get_client()` to get it. The `init` function will automatically start the client, while using raw `EurekaClient`, you must call the `start()` and `stop()` method explicitly. 
 
-*In this document, I will use the facade functions as the example, please note that you can find all the method with the same name in the `EurekaClient` class.*
+
+From `0.11.0`, all the methods in `EurekaClient` are defined `async`, and there are also async facade for `init`, `do_servise`, `stop` functions names `init_async`, `do_service_async`, `sto_async`.
 
 ### Registering to Eureka Server
 
@@ -241,33 +242,24 @@ except urllib.request.HTTPError as e:
     print(e)
 ```
 
-`do_service` function also recieve a `return_type` keyword parameter, which when `json` was passed, the result will be a `dict` type object whereas `response_object` is pass, the original HTTPResponse object will be return. And other parameters are follow the `urllib.request.urlopen` method, including `data`, etc. Please read the relative document for more information.
+`do_service` function also recieve a `return_type` keyword parameter, which when `json` was passed, the result will be a `dict` type object whereas `response_object` is pass, the original HTTPResponse object will be return. Please read the relative document for more information.
 
 You can also use its `async` version:
 
 ```python
 import py_eureka_client.eureka_client as eureka_client
 
-def success_callabck(data):
-    # type: (Union[str, dict]) -> object
-    # do what you will use of the result.
-    print(data)
-
-def error_callback(error):
-    # type: (urllib.request.HTTPError) -> object
-    # do what you need to do when error occures
-    print(error)
-
-eureka_client.do_service_async("OTHER-SERVICE-NAME", "/service/context/path", on_success=success_callabck, on_error=error_callback)
+res = await eureka_client.do_service_async("OTHER-SERVICE-NAME", "/service/context/path")
 ```
 
 *do_service method will automatically try other nodes when one node return a HTTP error, until one success or all nodes being tried.*
 
-If you want to use your own http library to do the request, use `walk_nodes` function:
+If you want to handle all the services' calling, you can use `walk_nodes` function:
 
 ```python
 import py_eureka_client.eureka_client as eureka_client
 
+# you can define this function with `async def`
 def walk_using_your_own_urllib(url):
     print(url)
     """
@@ -300,20 +292,8 @@ def walk_using_your_own_urllib(url):
     # Then the `eureka_client.walk_nodes` will try to find another node to do the service.
     """
 
-def success_callabck(data):
-    # type: (Union[str, dict]) -> object
-    # do what you will use of the result.
-    print(data)
-
-def error_callback(error):
-    # type: (urllib.request.HTTPError) -> object
-    # do what you need to do when error occures
-    print(error)
-
-eureka_client.walk_nodes("OTHER-SERVICE-NAME", "/service/context/path",
-                          walker=walk_using_your_own_urllib,
-                          on_success=success_callabck,
-                          on_error=error_callback)
+res = await eureka_client.walk_nodes_async("OTHER-SERVICE-NAME", "/service/context/path",
+                          walker=walk_using_your_own_urllib)
 ```
 
 ### High Available Strategies
@@ -355,50 +335,50 @@ inst = up_instances[0]
 
 You can use other http client to connect to eureka server and other service rather than the build-in urlopen method. It should be useful if you use https connections via self-signed cetificates. 
 
+From `0.11.0`, the methods of the `http_client.HttpClient` are defined `async`, you can not use some async http libs like `aiohttp`
+
 To do this, you should:
 
-1. Inherit the `HttpClient` class in `py_eureka_client.http_client`.
-2. Rewrite the `urlopen` method in your class.
-3. (Optional) If your urlopen do not return a `http.client.HTTPResponse`, you should also privide a method to read your response object into text.
-4. Set your class to `py_eureka_client.http_client`. 
+1. (Optional) At most scenario, you should also write a class that inherited from `py_eureka_client.http_client.HttpResponse`, for the reason of the `py_eureka_client.http_client.HttpResponse` class wraps the `http.client.HTTPResponse` which may not return by the third http libs. 
+2. Write a class inherited the `HttpClient` class in `py_eureka_client.http_client`.
+3. Rewrite the `urlopen` method in your class. this method must return an subclass of `py_eureka_client.http_client.HttpResponse`, which is a wrapper class that hold to properties called `raw_response` and `body_text`. 
+4. Set you own HttpClient object into `py_eureka_client.http_client` by `py_eureka_client.set_http_client`
 
 ```python
 import py_eureka_client.http_client as http_client
 
-# 1. Inherit the `HttpClient` class in `py_eureka_client.http_client`.
+# 1. A class inherited `py_eureka_client.http_client.HttpResonse`
+
+class MyHttpResponse(http_client.HttpResponse):
+
+    def __init__(self, raw_response):
+        """
+        " This raw response will return when you pass `response_object` in the `do_service` function.
+        """
+        self.raw_response = raw_response
+    
+    @property
+    def body_text(self):
+        txt = ""
+        """
+        " Read the body text from `self.raw_response`
+        """
+        return txt
+
+# 2. A class inherited `py_eureka_client.http_client.HttpClient`.
 class MyHttpClient(http_client.HttpClient):
 
-    # If you have some appended fields, please do not change the constructor, use *args, **kwargs is a good idea.
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kw)
-        self.other_field = "..."
-
-    # 2. Rewrite the `urlopen` method in your class.
-    # If you want to raise an exception, please make sure that the exception is an `urllib.error.HTTPError` or `urllib.error.URLError`
-    # (urllib2.HTTPError or urllib2.URLError in python 2), or it may cause some un-handled errors.
-    def urlopen(self):
-        # The flowing code is the default implementation, you can see what fields you can use. you can change your implementation here
-        return urllib.request.urlopen(self.request, data=self.data, timeout=self.timeout,
-                                     cafile=self.cafile, capath=self.capath,
-                                     cadefault=self.cadefault, context=self.context)
-
-    # 3. Optional, provide a `read_response_body` method to read your response object body to string.
-    def read_response_body(self, res) -> str:
-        if res.info().get("Content-Encoding") == "gzip":
-            f = gzip.GzipFile(fileobj=res)
-        else:
-            f = res
-
-        txt = f.read().decode(_DEFAULT_ENCODING)
-        f.close()
-        return txt
-        
+    # 3. Rewrite the `urlopen` method in your class.
+    # If you want to raise an exception, please make sure that the exception is an `http_client.HTTPError` or `http_client.URLError`.     
+    async def urlopen(self, request: Union[str, http_client.HttpRequest] = None,
+                      data: bytes = None, timeout: float = None) -> http_client.HttpResponse:
+        res = await your_own_http_client_lib.do_the_visit(request, data, timeout)
+        return MyHttpResponse(res)
+            
 
 # 4. Set your class to `py_eureka_client.http_client`. 
-http_client.set_http_client_class(MyHttpClient)
+http_client.set_http_client(MyHttpClient())
 ```
-
-You can find an example in this [issue](https://github.com/keijack/python-eureka-client/issues/35#issuecomment-706510869)
 
 ### Logger
 

@@ -107,15 +107,15 @@ class HttpRequest:
 class HttpResponse:
 
     def __init__(self) -> None:
-        self.response = None
+        self.raw_response = None
         self.__body_read = False
         self.__body_text = ''
 
     def __read_body(self):
-        if self.response.info().get("Content-Encoding") == "gzip":
-            f = gzip.GzipFile(fileobj=self.response)
+        if self.raw_response.info().get("Content-Encoding") == "gzip":
+            f = gzip.GzipFile(fileobj=self.raw_response)
         else:
-            f = self.response
+            f = self.raw_response
         self.__body_text = f.read().decode(_DEFAULT_ENCODING)
         f.close()
 
@@ -138,7 +138,7 @@ class HttpClient:
             raise URLError("Unvalid URL")
 
         res = HttpResponse()
-        res.response = urllib.request.urlopen(req._to_urllib_request(), data=data, timeout=timeout)
+        res.raw_response = urllib.request.urlopen(req._to_urllib_request(), data=data, timeout=timeout)
         return res
 
 

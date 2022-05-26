@@ -931,7 +931,7 @@ class EurekaClient:
             if return_type.lower() in ("json", "dict", "dictionary"):
                 return json.loads(res.body_text)
             elif return_type.lower() == "response_object":
-                return res.response
+                return res.raw_response
             else:
                 return res.body_text
         return await self.walk_nodes(app_name, service, prefer_ip, prefer_https, walk_using_urllib)
@@ -1057,47 +1057,47 @@ __cache_clients: Dict[str, EurekaClient] = {}
 __cache_clients_lock = RLock()
 
 
-async def init(eureka_server: str = _DEFAULT_EUREKA_SERVER_URL,
-               eureka_domain: str = "",
-               region: str = "",
-               zone: str = "",
-               eureka_availability_zones: Dict[str, str] = {},
-               eureka_protocol: str = "http",
-               eureka_basic_auth_user: str = "",
-               eureka_basic_auth_password: str = "",
-               eureka_context: str = "/eureka",
-               prefer_same_zone: bool = True,
-               should_register: bool = True,
-               should_discover: bool = True,
-               on_error: Callable = None,
-               app_name: str = "",
-               instance_id: str = "",
-               instance_host: str = "",
-               instance_ip: str = "",
-               instance_ip_network: str = "",
-               instance_port: int = _DEFAULT_INSTNACE_PORT,
-               instance_unsecure_port_enabled: bool = True,
-               instance_secure_port: int = _DEFAULT_INSTNACE_SECURE_PORT,
-               instance_secure_port_enabled: bool = False,
-               data_center_name: str = _DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
-               renewal_interval_in_secs: int = _RENEWAL_INTERVAL_IN_SECS,
-               duration_in_secs: int = _DURATION_IN_SECS,
-               home_page_url: str = "",
-               status_page_url: str = "",
-               health_check_url: str = "",
-               secure_health_check_url: str = "",
-               vip_adr: str = "",
-               secure_vip_addr: str = "",
-               is_coordinating_discovery_server: bool = False,
-               metadata: Dict = {},
-               remote_regions: List[str] = [],
-               ha_strategy: int = HA_STRATEGY_RANDOM,
-               strict_service_error_policy: bool = True) -> EurekaClient:
+async def init_async(eureka_server: str = _DEFAULT_EUREKA_SERVER_URL,
+                     eureka_domain: str = "",
+                     region: str = "",
+                     zone: str = "",
+                     eureka_availability_zones: Dict[str, str] = {},
+                     eureka_protocol: str = "http",
+                     eureka_basic_auth_user: str = "",
+                     eureka_basic_auth_password: str = "",
+                     eureka_context: str = "/eureka",
+                     prefer_same_zone: bool = True,
+                     should_register: bool = True,
+                     should_discover: bool = True,
+                     on_error: Callable = None,
+                     app_name: str = "",
+                     instance_id: str = "",
+                     instance_host: str = "",
+                     instance_ip: str = "",
+                     instance_ip_network: str = "",
+                     instance_port: int = _DEFAULT_INSTNACE_PORT,
+                     instance_unsecure_port_enabled: bool = True,
+                     instance_secure_port: int = _DEFAULT_INSTNACE_SECURE_PORT,
+                     instance_secure_port_enabled: bool = False,
+                     data_center_name: str = _DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
+                     renewal_interval_in_secs: int = _RENEWAL_INTERVAL_IN_SECS,
+                     duration_in_secs: int = _DURATION_IN_SECS,
+                     home_page_url: str = "",
+                     status_page_url: str = "",
+                     health_check_url: str = "",
+                     secure_health_check_url: str = "",
+                     vip_adr: str = "",
+                     secure_vip_addr: str = "",
+                     is_coordinating_discovery_server: bool = False,
+                     metadata: Dict = {},
+                     remote_regions: List[str] = [],
+                     ha_strategy: int = HA_STRATEGY_RANDOM,
+                     strict_service_error_policy: bool = True) -> EurekaClient:
     """
     Initialize an EurekaClient object and put it to cache, you can use a set of functions to do the service.
 
     Unlike using EurekaClient class that you need to start and stop the client object by yourself, this method 
-    will start the client automatically after the object created and stop it when the programe exist.
+    will start the client automatically after the object created.
 
     read EurekaClient for more information for the parameters details.
     """
@@ -1156,11 +1156,11 @@ def get_client() -> EurekaClient:
             return None
 
 
-async def walk_nodes(app_name: str = "",
-                     service: str = "",
-                     prefer_ip: bool = False,
-                     prefer_https: bool = False,
-                     walker: Callable = None) -> Union[str, Dict, http_client.HttpResponse]:
+async def walk_nodes_async(app_name: str = "",
+                           service: str = "",
+                           prefer_ip: bool = False,
+                           prefer_https: bool = False,
+                           walker: Callable = None) -> Union[str, Dict, http_client.HttpResponse]:
     cli = get_client()
     if cli is None:
         raise Exception("Discovery Client has not initialized. ")
@@ -1169,11 +1169,11 @@ async def walk_nodes(app_name: str = "",
     return res
 
 
-async def do_service(app_name: str = "", service: str = "", return_type: str = "string",
-                     prefer_ip: bool = False, prefer_https: bool = False,
-                     method: str = "GET", headers: Dict[str, str] = None,
-                     data: Union[bytes, str, Dict] = None, timeout: float = _DEFAULT_TIME_OUT
-                     ) -> Union[str, Dict, http_client.HttpResponse]:
+async def do_service_async(app_name: str = "", service: str = "", return_type: str = "string",
+                           prefer_ip: bool = False, prefer_https: bool = False,
+                           method: str = "GET", headers: Dict[str, str] = None,
+                           data: Union[bytes, str, Dict] = None, timeout: float = _DEFAULT_TIME_OUT
+                           ) -> Union[str, Dict, http_client.HttpResponse]:
     cli = get_client()
     if cli is None:
         raise Exception("Discovery Client has not initialized. ")
@@ -1185,7 +1185,133 @@ async def do_service(app_name: str = "", service: str = "", return_type: str = "
     return res
 
 
-async def stop() -> None:
+async def stop_async() -> None:
     client = get_client()
     if client is not None:
         await client.stop()
+
+_event_loop: asyncio.AbstractEventLoop = None
+
+
+def set_event_loop(event_loop: asyncio.AbstractEventLoop):
+    global _event_loop
+    if not isinstance(event_loop, asyncio.AbstractEventLoop):
+        raise Exception("You must set an even loop object into this.")
+    _event_loop = event_loop
+
+
+def get_event_loop() -> asyncio.AbstractEventLoop:
+    global _event_loop
+    if not _event_loop:
+        try:
+            _event_loop = asyncio.new_event_loop()
+        except:
+            _event_loop = asyncio.get_event_loop()
+    return _event_loop
+
+
+def init(eureka_server: str = _DEFAULT_EUREKA_SERVER_URL,
+         eureka_domain: str = "",
+         region: str = "",
+         zone: str = "",
+         eureka_availability_zones: Dict[str, str] = {},
+         eureka_protocol: str = "http",
+         eureka_basic_auth_user: str = "",
+         eureka_basic_auth_password: str = "",
+         eureka_context: str = "/eureka",
+         prefer_same_zone: bool = True,
+         should_register: bool = True,
+         should_discover: bool = True,
+         on_error: Callable = None,
+         app_name: str = "",
+         instance_id: str = "",
+         instance_host: str = "",
+         instance_ip: str = "",
+         instance_ip_network: str = "",
+         instance_port: int = _DEFAULT_INSTNACE_PORT,
+         instance_unsecure_port_enabled: bool = True,
+         instance_secure_port: int = _DEFAULT_INSTNACE_SECURE_PORT,
+         instance_secure_port_enabled: bool = False,
+         data_center_name: str = _DEFAULT_DATA_CENTER_INFO,  # Netflix, Amazon, MyOwn
+         renewal_interval_in_secs: int = _RENEWAL_INTERVAL_IN_SECS,
+         duration_in_secs: int = _DURATION_IN_SECS,
+         home_page_url: str = "",
+         status_page_url: str = "",
+         health_check_url: str = "",
+         secure_health_check_url: str = "",
+         vip_adr: str = "",
+         secure_vip_addr: str = "",
+         is_coordinating_discovery_server: bool = False,
+         metadata: Dict = {},
+         remote_regions: List[str] = [],
+         ha_strategy: int = HA_STRATEGY_RANDOM,
+         strict_service_error_policy: bool = True) -> EurekaClient:
+    """
+    Initialize an EurekaClient object and put it to cache, you can use a set of functions to do the service.
+
+    Unlike using EurekaClient class that you need to start and stop the client object by yourself, this method 
+    will start the client automatically after the object created.
+
+    read EurekaClient for more information for the parameters details.
+    """
+    return get_event_loop().run_until_complete(init_async(eureka_server=eureka_server,
+                                                          eureka_domain=eureka_domain,
+                                                          region=region,
+                                                          zone=zone,
+                                                          eureka_availability_zones=eureka_availability_zones,
+                                                          eureka_protocol=eureka_protocol,
+                                                          eureka_basic_auth_user=eureka_basic_auth_user,
+                                                          eureka_basic_auth_password=eureka_basic_auth_password,
+                                                          eureka_context=eureka_context,
+                                                          prefer_same_zone=prefer_same_zone,
+                                                          should_register=should_register,
+                                                          should_discover=should_discover,
+                                                          on_error=on_error,
+                                                          app_name=app_name,
+                                                          instance_id=instance_id,
+                                                          instance_host=instance_host,
+                                                          instance_ip=instance_ip,
+                                                          instance_ip_network=instance_ip_network,
+                                                          instance_port=instance_port,
+                                                          instance_unsecure_port_enabled=instance_unsecure_port_enabled,
+                                                          instance_secure_port=instance_secure_port,
+                                                          instance_secure_port_enabled=instance_secure_port_enabled,
+                                                          data_center_name=data_center_name,
+                                                          renewal_interval_in_secs=renewal_interval_in_secs,
+                                                          duration_in_secs=duration_in_secs,
+                                                          home_page_url=home_page_url,
+                                                          status_page_url=status_page_url,
+                                                          health_check_url=health_check_url,
+                                                          secure_health_check_url=secure_health_check_url,
+                                                          vip_adr=vip_adr,
+                                                          secure_vip_addr=secure_vip_addr,
+                                                          is_coordinating_discovery_server=is_coordinating_discovery_server,
+                                                          metadata=metadata,
+                                                          remote_regions=remote_regions,
+                                                          ha_strategy=ha_strategy,
+                                                          strict_service_error_policy=strict_service_error_policy))
+
+
+def walk_nodes(app_name: str = "",
+               service: str = "",
+               prefer_ip: bool = False,
+               prefer_https: bool = False,
+               walker: Callable = None) -> Union[str, Dict, http_client.HttpResponse]:
+    return get_event_loop().run_until_complete(walk_nodes_async(app_name=app_name, service=service,
+                                                                prefer_ip=prefer_ip, prefer_https=prefer_https, walker=walker))
+
+
+def do_service(app_name: str = "", service: str = "", return_type: str = "string",
+               prefer_ip: bool = False, prefer_https: bool = False,
+               method: str = "GET", headers: Dict[str, str] = None,
+               data: Union[bytes, str, Dict] = None, timeout: float = _DEFAULT_TIME_OUT
+               ) -> Union[str, Dict, http_client.HttpResponse]:
+
+    return get_event_loop().run_until_complete(do_service_async(app_name=app_name, service=service, return_type=return_type,
+                                                                prefer_ip=prefer_ip, prefer_https=prefer_https,
+                                                                method=method, headers=headers,
+                                                                data=data, timeout=timeout))
+
+
+def stop() -> None:
+    get_event_loop().run_until_complete(stop_async())

@@ -59,6 +59,8 @@ res = eureka_client.do_service("OTHER-SERVICE-NAME", "/service/context/path",
                                # 返回类型，默认为 `string`，可以传入 `json`，如果传入值是 `json`，那么该方法会返回一个 `dict` 对象
                                return_type="string")
 print("result of other service" + res)
+# 服务停止时调用，会调用 eureka 的 cancel 方法
+eureka_client.stop()
 ```
 
 你也可以直接使用 `EurekaClient` 类。
@@ -66,14 +68,16 @@ print("result of other service" + res)
 ```python
 from py_eureka_client.eureka_client import EurekaClient
 client = EurekaClient(eureka_server="http://my_eureka_server_peer_1/eureka/v2,http://my_eureka_server_peer_2/eureka/v2", app_name="python_module_1", instance_port=9090)
-client.start()
-res = client.do_service("OTHER-SERVICE-NAME", "/service/context/path")
+await client.start()
+res = await client.do_service("OTHER-SERVICE-NAME", "/service/context/path")
 print("result of other service" + res)
 # when server is shutted down:
-client.stop()
+await client.stop()
 ```
 
-事实上，`init` 和相关的方法只是 `EurekaClient` 的一个门面（facade），其底层最终还是包含这一个 `EurekaClient` 的实例对象。你可以接收 `init` 方法的返回值，或者使用 `eureka_client.get_client()` 取得这个对象。`init` 会自动开始注册、心跳流程，并且会在程序退出的时候自动发送退出信号。而如果你 直接使用 `EurekaClient` 对象，你需要显式调用`start()` 和 `stop()` 方法来开始和停止注册过程。
+事实上，`init` 和相关的方法只是 `EurekaClient` 的一个门面（facade），其底层最终还是包含这一个 `EurekaClient` 的实例对象。你可以接收 `init` 方法的返回值，或者使用 `eureka_client.get_client()` 取得这个对象。`init` 会自动开始注册、心跳流程。而如果你 直接使用 `EurekaClient` 对象，你需要显式调用`start()` 和 `stop()` 方法来开始和停止注册过程。
+
+从`0.11.0`开始，`EurekaClient` 提供的方法均为`async def`，而门面方面也提供对应的`async def` 版本，分别命名为 `init_async`、`do_service_async`、`walk_nodes_async`、`stop_async`。
 
 *在接下来的文档中，我会仅使用门面（facade）函数作为例子，事实上，你可以从 `EurekaClient` 类中找到这些函数对应的方法。*
 
@@ -251,24 +255,12 @@ except urllib.request.HTTPError as e:
 
 上述参数中，return_type 可以选择传入`json`，如果传入`json`，则该接口返回一个 `dict` 对象，如果传入`response_object`，那么该方法会返回原始的 HTTPResponse 对象。该参数也可不传入，默认返回的为 `str` 的响应体的内容。
 
-这个方法还接受其他的参数，剩余的参数和 `urllib.request.urlopen` 接口一致。请参考相关的接口或者源代码进行传入。
-
 这个方法还提供异步的版本：
 
 ```python
 import py_eureka_client.eureka_client as eureka_client
 
-def success_callabck(data):
-    # type: (Union[str, dict]) -> object
-    # 处理正常返回的参数
-    print(data)
-
-def error_callback(error):
-    # type: (urllib.request.HTTPError) -> object
-    # 处理错误
-    print(error)
-
-eureka_client.do_service_async("OTHER-SERVICE-NAME", "/service/context/path", on_success=success_callabck, on_error=error_callback)
+res = await eureka_client.do_service_async("OTHER-SERVICE-NAME", "/service/context/path")
 ```
 
 如果你不希望使用内置的 HTTP 客户端，希望使用其他的客户端的话，你可以使用 `walk_nodes` 函数来实现：
@@ -302,15 +294,8 @@ import py_eureka_client.eureka_client as eureka_client
 def walk_using_your_own_urllib(url):
     print(url)
 
-def success_callabck(data):
-    # type: (Union[str, dict]) -> object
-    print(data)
 
-def error_callback(error):
-    # type: (urllib.request.HTTPError) -> object
-    print(error)
-
-eureka_client.walk_nodes("OTHER-SERVICE-NAME", "/service/context/path",
+res = await eureka_client.walk_nodes("OTHER-SERVICE-NAME", "/service/context/path",
                           walker=walk_using_your_own_urllib,
                           on_success=success_callabck,
                           on_error=error_callback)
@@ -361,47 +346,46 @@ inst = up_instances[0]
 
 你需要以下步骤来使用自己的 HTTP 客户端：
 
-1. 继承 `py_eureka_client.http_client` 中的 `HttpClient` 类。
-2. 重写该类的 `urlopen` 方法，注意：该方法返回的是响应体的文本。
-3. (可选) 当你的 `urlopen` 方法不是返回 `http.client.HTTPResponse`，你还需要提供一个 `read_response_body` 方法来读取其响应体中的字符串。
-4. 将你定义的类设置到`py_eureka_client.http_client` 中。
+1. （可选）大部分情况下，你需要编写一个继承`py_eureka_client.http_client.HttpResponse`的类，该类必须提供两个属性`raw_response`和`body_text`。其中，`raw_response`仅在`do_service`传入`response_object`时返回。
+2. 编写一个类继承 `py_eureka_client.http_client.HttpClient` 类。
+3. 重写该类的 `urlopen` 方法，该方法需要返回一个`py_eureka_client.http_client.HttpResponse`的子类对象。
+4. 将你定义的类的对象设置到`py_eureka_client.http_client` 中。
 
 ```python
 import py_eureka_client.http_client as http_client
 
-# 1. 继承 `py_eureka_client.http_client` 中的 `HttpClient` 类。
-class MyHttpClient(http_client.HttpClient):
+# 1. 编写一个继承`py_eureka_client.http_client.HttpResponse`的类，该类必须提供两个属性`raw_response`和`body_text`。
+class MyHttpResponse(http_client.HttpResponse):
 
-    # 如果你需要自定义一些字段，也请不要修改构造方法的参数值。在这种情况下，使用 *args, **kwargs 是一个很好的选择。
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kw)
-        self.other_field = "..."
-
-    # 2. 重写该类的 `urlopen` 方法，注意：该方法返回的是响应体的文本。
-    # 请注意，如果你要抛出异常，请确保抛出的是 urllib.error.HTTPError 或者 urllib.error.URLError
-    # (Python 2 则分别是 urllib2.HTTPError 或者 urllib2.URLError) 否则可能会发生未可知之错误。
-    def urlopen(self):
-        # 以下是默认实现，你可以查看该类有哪一些参数。
-        return urllib2.urlopen(self.request, data=self.data, timeout=self.timeout,
-                              cafile=self.cafile, capath=self.capath,
-                              cadefault=self.cadefault, context=self.context)
-
-    # 3. 可选，提供一个方法读取响应体中的文本内容。
-    def read_response_body(self, res) -> str:
-        if res.info().get("Content-Encoding") == "gzip":
-            f = gzip.GzipFile(fileobj=res)
-        else:
-            f = res
-
-        txt = f.read().decode(_DEFAULT_ENCODING)
-        f.close()
+    def __init__(self, raw_response):
+        """
+        " This raw response will return when you pass `response_object` in the `do_service` function.
+        """
+        self.raw_response = raw_response
+    
+    @property
+    def body_text(self):
+        txt = ""
+        """
+        " Read the body text from `self.raw_response`
+        """
         return txt
 
-# 4. 将你定义的类设置到`py_eureka_client.http_client` 中。
-http_client.set_http_client_class(MyHttpClient)
-```
+# 2. 编写一个类继承 `py_eureka_client.http_client.HttpClient` 类
+class MyHttpClient(http_client.HttpClient):
 
-你可在这个[问题](https://github.com/keijack/python-eureka-client/issues/35#issuecomment-706510869)中找到实际应用的例子。
+    # 3. 重写该类的 `urlopen` 方法，该方法需要返回一个`py_eureka_client.http_client.HttpResponse`的子类对象
+    # 如果你需要返回异常，请注意返回 `http_client.HTTPError` 或者 `http_client.URLError`。
+    async def urlopen(self, request: Union[str, http_client.HttpRequest] = None,
+                      data: bytes = None, timeout: float = None) -> http_client.HttpResponse:
+        res = await your_own_http_client_lib.do_the_visit(request, data, timeout)
+        # 返回你定义的 HttpRespone 对象。
+        return MyHttpResponse(res)
+            
+
+# 4. 将你的类对象设置到 http_client 中。
+http_client.set_http_client(MyHttpClient())
+```
 
 ### 日志
 
