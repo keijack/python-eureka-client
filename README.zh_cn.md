@@ -342,7 +342,9 @@ inst = up_instances[0]
 
 ### 使用三方 HTTP 客户端
 
-默认情况下，组件使用了内置的 urllib.request (python 2 中时 urllib2 ) 来进行 HTTP 请求。你可以使用别的 HTTP 库来进行访问。这在自签名的 HTTPS 证书的场景下尤为有效。
+默认情况下，组件使用了内置的 urllib.request 来进行 HTTP 请求。你可以使用别的 HTTP 库来进行访问。这在自签名的 HTTPS 证书的场景下尤为有效。
+
+从 `0.11.0` 开始，底层的 Httplient 类的所有方法都定义为 `async def`，这使得你更容易地接入一些异步 IO 的第三方库，例如 `aiohttp`。
 
 你需要以下步骤来使用自己的 HTTP 客户端：
 
