@@ -123,6 +123,7 @@ class HttpResponse:
     def body_text(self):
         if not self.__body_read:
             self.__read_body()
+            self.__body_read = True
         return self.__body_text
 
 
