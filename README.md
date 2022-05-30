@@ -18,10 +18,11 @@ Python 3.7+
 * Support failover.
 * Support DNS discovery. 
 * Send heartbeat to eureka server.
-* Auto unregister from eureka server when your server goes down.
 * Pull registry from eureka server.
 * Easy to use interface to use other REST service.
 * HA when calling other REST service.
+* Both trandictional and async def interfaces are provided.
+* The http client lib is replacable.
 
 ## How to use
 
