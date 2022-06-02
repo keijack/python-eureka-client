@@ -336,7 +336,7 @@ inst = up_instances[0]
 
 You can use other http client to connect to eureka server and other service rather than the build-in urlopen method. It should be useful if you use https connections via self-signed cetificates. 
 
-From `0.11.0`, the methods of the `http_client.HttpClient` are defined `async`, you can not use some async http libs like `aiohttp`
+From `0.11.0`, the methods of the `http_client.HttpClient` are defined `async`, you can now use some async http libs like `aiohttp`
 
 To do this, you should:
 
