@@ -375,6 +375,12 @@ class MyHttpClient(http_client.HttpClient):
                       data: bytes = None, timeout: float = None) -> http_client.HttpResponse:
         res = await your_own_http_client_lib.do_the_visit(request, data, timeout)
         return MyHttpResponse(res)
+        # You can parse your response object here, and set the body_text to http_client.HttpResponse, then you may ignore the http_client.HttpResponse inheritance.
+        # body_txt = parse_res_body(res)
+        # http_res = http_client.HttpResponse()
+        # http_res.raw_response = res
+        # http_res.body_text = body_text
+        # return http_res
             
 
 # 4. Set your class to `py_eureka_client.http_client`. 

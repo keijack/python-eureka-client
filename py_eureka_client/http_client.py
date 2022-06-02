@@ -108,23 +108,7 @@ class HttpResponse:
 
     def __init__(self) -> None:
         self.raw_response = None
-        self.__body_read = False
-        self.__body_text = ''
-
-    def __read_body(self):
-        if self.raw_response.info().get("Content-Encoding") == "gzip":
-            f = gzip.GzipFile(fileobj=self.raw_response)
-        else:
-            f = self.raw_response
-        self.__body_text = f.read().decode(_DEFAULT_ENCODING)
-        f.close()
-
-    @property
-    def body_text(self):
-        if not self.__body_read:
-            self.__read_body()
-            self.__body_read = True
-        return self.__body_text
+        self.body_text = ''
 
 
 class HttpClient:
@@ -140,7 +124,17 @@ class HttpClient:
 
         res = HttpResponse()
         res.raw_response = urllib.request.urlopen(req._to_urllib_request(), data=data, timeout=timeout)
+        res.body_text = self.__read_body(res.raw_response)
         return res
+
+    def __read_body(self, res):
+        if res.info().get("Content-Encoding") == "gzip":
+            f = gzip.GzipFile(fileobj=res)
+        else:
+            f = res
+        body_text = f.read().decode(_DEFAULT_ENCODING)
+        f.close()
+        return body_text
 
 
 http_client = HttpClient()

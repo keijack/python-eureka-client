@@ -384,6 +384,12 @@ class MyHttpClient(http_client.HttpClient):
         res = await your_own_http_client_lib.do_the_visit(request, data, timeout)
         # 返回你定义的 HttpRespone 对象。
         return MyHttpResponse(res)
+        # 你也可以在此解析了 body_text，摄入 HttpResponse 中，那么你就不需要继承 http_client.HttpResponse 了。
+        # body_txt = parse_res_body(res)
+        # http_res = http_client.HttpResponse()
+        # http_res.raw_response = res
+        # http_res.body_text = body_text
+        # return http_res
             
 
 # 4. 将你的类对象设置到 http_client 中。
