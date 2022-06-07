@@ -106,9 +106,32 @@ class HttpRequest:
 
 class HttpResponse:
 
-    def __init__(self) -> None:
-        self.raw_response = None
-        self.body_text = ''
+    def __init__(self, raw_response=None) -> None:
+        self.raw_response = raw_response
+        self.__body_read = False
+        self.__body_text = ''
+
+    def _read_body(self):
+        res = self.raw_response
+        if res.info().get("Content-Encoding") == "gzip":
+            f = gzip.GzipFile(fileobj=res)
+        else:
+            f = res
+        body_text = f.read().decode(_DEFAULT_ENCODING)
+        f.close()
+        return body_text
+
+    @property
+    def body_text(self):
+        if not self.__body_read:
+            self.__body_text = self._read_body()
+            self.__body_read = True
+        return self.__body_text
+
+    @body_text.setter
+    def body_text(self, val):
+        self.__body_text = val
+        self.__body_read = True
 
 
 class HttpClient:
@@ -122,19 +145,8 @@ class HttpClient:
         else:
             raise URLError("Unvalid URL")
 
-        res = HttpResponse()
-        res.raw_response = urllib.request.urlopen(req._to_urllib_request(), data=data, timeout=timeout)
-        res.body_text = self.__read_body(res.raw_response)
-        return res
-
-    def __read_body(self, res):
-        if res.info().get("Content-Encoding") == "gzip":
-            f = gzip.GzipFile(fileobj=res)
-        else:
-            f = res
-        body_text = f.read().decode(_DEFAULT_ENCODING)
-        f.close()
-        return body_text
+        res = urllib.request.urlopen(req._to_urllib_request(), data=data, timeout=timeout)
+        return HttpResponse(res)
 
 
 http_client = HttpClient()
