@@ -28,6 +28,7 @@ import asyncio
 import json
 import re
 import socket
+import threading
 import time
 
 import random
@@ -48,7 +49,7 @@ from py_eureka_client import ACTION_TYPE_ADDED, ACTION_TYPE_MODIFIED, ACTION_TYP
 from py_eureka_client import HA_STRATEGY_RANDOM, HA_STRATEGY_STICK, HA_STRATEGY_OTHER
 from py_eureka_client import ERROR_REGISTER, ERROR_DISCOVER, ERROR_STATUS_UPDATE
 from py_eureka_client import _DEFAULT_EUREKA_SERVER_URL, _DEFAULT_INSTNACE_PORT, _DEFAULT_INSTNACE_SECURE_PORT, _RENEWAL_INTERVAL_IN_SECS, _RENEWAL_INTERVAL_IN_SECS, _DURATION_IN_SECS, _DEFAULT_DATA_CENTER_INFO, _DEFAULT_DATA_CENTER_INFO_CLASS, _AMAZON_DATA_CENTER_INFO_CLASS
-from py_eureka_client import _DEFAULT_ENCODING, _DEFAUTL_ZONE, _DEFAULT_TIME_OUT
+from py_eureka_client import _DEFAUTL_ZONE, _DEFAULT_TIME_OUT
 
 from py_eureka_client.eureka_basic import LeaseInfo, DataCenterInfo, PortWrapper, Instance, Application, Applications
 from py_eureka_client.eureka_basic import register, _register, cancel, send_heartbeat, status_update, delete_status_override
@@ -1190,24 +1191,22 @@ async def stop_async() -> None:
     if client is not None:
         await client.stop()
 
-_event_loop: asyncio.AbstractEventLoop = None
+_thread_local = threading.local()
 
 
 def set_event_loop(event_loop: asyncio.AbstractEventLoop):
-    global _event_loop
     if not isinstance(event_loop, asyncio.AbstractEventLoop):
         raise Exception("You must set an even loop object into this.")
-    _event_loop = event_loop
+    _thread_local.event_loop = event_loop
 
 
 def get_event_loop() -> asyncio.AbstractEventLoop:
-    global _event_loop
-    if not _event_loop:
+    if not hasattr(_thread_local, "event_loop"):
         try:
-            _event_loop = asyncio.new_event_loop()
+            _thread_local.event_loop = asyncio.new_event_loop()
         except:
-            _event_loop = asyncio.get_event_loop()
-    return _event_loop
+            _thread_local.event_loop = asyncio.get_event_loop()
+    return _thread_local.event_loop
 
 
 def init(eureka_server: str = _DEFAULT_EUREKA_SERVER_URL,
