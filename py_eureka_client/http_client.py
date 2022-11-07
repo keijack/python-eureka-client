@@ -25,10 +25,11 @@ SOFTWARE.
 import re
 import base64
 import gzip
-from typing import Union
-
 import urllib.request
 import urllib.error
+
+from typing import Union
+from urllib.parse import unquote
 
 
 class HTTPError(urllib.error.HTTPError):
@@ -64,7 +65,7 @@ def parse_url(url):
         addr = url
         if m.group(2) is not None:
             addr = addr.replace(m.group(2), "")
-            ori_auth = f"{m.group(3)}:{m.group(4)}".encode()
+            ori_auth = f"{unquote(m.group(3))}:{unquote(m.group(4))}".encode()
             auth_str = base64.standard_b64encode(ori_auth).decode()
         else:
             auth_str = None
