@@ -1,0 +1,37 @@
+[build-system]
+requires = [
+    "setuptools>=65",
+    "wheel"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "py_eureka_client"
+description = "A eureka client written in python. Support registering your python component to Eureka Server, as well as calling remote services by pulling the the Eureka registry. "
+readme = "README.md"
+authors = [
+    { name = "keijack", email = "keijack.wu@gmail.com" }
+]
+requires-python = ">=3.7"
+keywords = ["eureka", "netflix", "microservice"]
+license = {file = "LICENSE"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "ifaddr",
+    "dnspython"
+]
+dynamic = ["version"]
+
+[tool.setuptools]
+packages = ["py_eureka_client"]
+
+[tool.setuptools.dynamic]
+version = {attr = "py_eureka_client.version"}
+
+[project.urls]
+homepage = "https://github.com/keijack/python-eureka-client"
+repository = "https://github.com/keijack/python-eureka-client"
