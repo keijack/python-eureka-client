@@ -138,11 +138,12 @@ class HttpResponse:
 class HttpClient:
 
     async def urlopen(self, request: Union[str, HttpRequest] = None,
-                      data: bytes = None, timeout: float = None) -> HttpResponse:
+                      data: bytes = None, timeout: float = None,
+                      headers = {'Accept-Encoding':'gzip, deflate'}) -> HttpResponse:
         if isinstance(request, HttpRequest):
             req = request
         elif isinstance(request, str):
-            req = HttpRequest(request)
+            req = HttpRequest(request,headers=headers)
         else:
             raise URLError("Unvalid URL")
 
