@@ -138,14 +138,13 @@ class HttpResponse:
 class HttpClient:
 
     async def urlopen(self, request: Union[str, HttpRequest] = None,
-                      data: bytes = None, timeout: float = None,
-                      headers = {'Accept-Encoding':'gzip, deflate'}) -> HttpResponse:
+                      data: bytes = None, timeout: float = None) -> HttpResponse:
         if isinstance(request, HttpRequest):
             req = request
         elif isinstance(request, str):
-            req = HttpRequest(request,headers=headers)
+            req = HttpRequest(request, headers={'Accept-Encoding': 'gzip'})
         else:
-            raise URLError("Unvalid URL")
+            raise URLError("Invalid URL")
 
         res = urllib.request.urlopen(req._to_urllib_request(), data=data, timeout=timeout)
         return HttpResponse(res)
