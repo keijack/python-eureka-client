@@ -1,4 +1,4 @@
-[build-system]
+    [build-system]
 requires = [
     "setuptools>=65",
     "wheel"
@@ -20,14 +20,17 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-dynamic = ["version", "dependencies"]
+dynamic = ["version"]
+dependencies = [
+    "ifaddr>=0.1.7",
+    "dnspython>=2.2.0"
+]
 
 [tool.setuptools]
 packages = ["py_eureka_client"]
 
 [tool.setuptools.dynamic]
 version = {attr = "py_eureka_client.version"}
-dependencies = { file = "requirements.txt" }
 
 [project.urls]
 homepage = "https://github.com/keijack/python-eureka-client"
