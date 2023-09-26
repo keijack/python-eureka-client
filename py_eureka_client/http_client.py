@@ -146,7 +146,9 @@ class HttpClient:
         else:
             raise URLError("Invalid URL")
 
-        res = urllib.request.urlopen(req._to_urllib_request(), data=data, timeout=timeout)
+        req = req._to_urllib_request()
+        req.add_header("Connection", "close")
+        res = urllib.request.urlopen(req, data=data, timeout=timeout)
         return HttpResponse(res)
 
 
