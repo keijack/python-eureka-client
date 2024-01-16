@@ -1,2 +1,2 @@
-ifaddr>=0.1.7
-dnspython>=2.2.0
+ifaddr>=0.2.0
+dnspython>=2.4.2
