@@ -27,17 +27,10 @@ import base64
 import gzip
 import urllib.request
 import urllib.error
+from urllib.error import HTTPError, URLError
 
 from typing import Union
 from urllib.parse import unquote
-
-
-class HTTPError(urllib.error.HTTPError):
-    pass
-
-
-class URLError(urllib.error.URLError):
-    pass
 
 
 """
