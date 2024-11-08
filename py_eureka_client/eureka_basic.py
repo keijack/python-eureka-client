@@ -244,7 +244,7 @@ class Applications:
     def get_application(self, app_name: str = "") -> Application:
         with self.__app_lock:
             aname = app_name.upper()
-            if app_name in self.__application_name_dic:
+            if aname in self.__application_name_dic:
                 return self.__application_name_dic[aname]
             else:
                 return Application(name=aname)
