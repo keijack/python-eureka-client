@@ -417,6 +417,16 @@ logger.set_level("DEBUG")
 
 This logger will first save all the log record to a global queue, and then output them in a background thread, so it is very suitable for getting several logger with a same handler, especialy the `TimedRotatingFileHandler` which may slice the log files not quite well in a mutiple thread environment. 
 
+### Costom Logger
+
+If you want to use your own logger, you can do this:
+
+```python
+import py_eureka_client.logger as logger
+
+logger.set_custom_logger(your_logger)
+```
+
 ## Amazon Data Center Support
 
 This component should support deploying in Amazone EC2, it should automatically load metadata from Amazon metadata service. All the metadata keys come from `com.netflix.appinfo.AmazonInfo` in Netflix's java client. BUT for the reason that I have no amazon environment to test, it may not work. If errors occurs, please submit an issue and provide some detail logs, I will try to fix it as far as I can. If it works, a reply in this [issue](https://github.com/keijack/python-eureka-client/issues/33) is wellcomed.

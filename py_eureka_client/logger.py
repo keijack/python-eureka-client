@@ -168,6 +168,8 @@ _default_logger_factory: LoggerFactory = LoggerFactory()
 
 _logger_factories: Dict[str, LoggerFactory] = {}
 
+_custom_logger: logging.Logger = None
+
 
 def get_logger_factory(tag: str = "") -> LoggerFactory:
     if not tag:
@@ -193,5 +195,14 @@ def set_handler(handler: logging.Handler) -> None:
     _default_logger_factory.set_handler(handler)
 
 
-def get_logger(tag: str = "pythone-simple-http-server") -> logging.Logger:
+def get_logger(tag: str = "python-eureka-client") -> logging.Logger:
+    global _custom_logger
+    if _custom_logger:
+        return _custom_logger
     return _default_logger_factory.get_logger(tag)
+
+
+def set_custom_logger(logger: logging.Logger) -> None:
+    assert isinstance(logger, logging.Logger)
+    global _custom_logger
+    _custom_logger = logger
