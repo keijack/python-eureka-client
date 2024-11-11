@@ -30,6 +30,14 @@ import asyncio
 from threading import Thread
 from typing import Dict, List, Tuple
 
+_custom_logger: logging.Logger = None
+
+
+def set_custom_logger(logger: logging.Logger) -> None:
+    assert isinstance(logger, logging.Logger)
+    global _custom_logger
+    _custom_logger = logger
+
 
 class LazyCalledLogger(logging.Logger):
 
@@ -90,7 +98,10 @@ class CachingLogger(LazyCalledLogger):
     logger_thread: LazyCalledLoggerThread = LazyCalledLoggerThread()
 
     def callHandlers(self, record):
-        CachingLogger.logger_thread.call_logger_handler(self, record)
+        if _custom_logger is not None:
+            _custom_logger.callHandlers(record)
+        else:
+            CachingLogger.logger_thread.call_logger_handler(self, record)
 
 
 class LoggerFactory:
@@ -168,8 +179,6 @@ _default_logger_factory: LoggerFactory = LoggerFactory()
 
 _logger_factories: Dict[str, LoggerFactory] = {}
 
-_custom_logger: logging.Logger = None
-
 
 def get_logger_factory(tag: str = "") -> LoggerFactory:
     if not tag:
@@ -196,13 +205,4 @@ def set_handler(handler: logging.Handler) -> None:
 
 
 def get_logger(tag: str = "python-eureka-client") -> logging.Logger:
-    global _custom_logger
-    if _custom_logger:
-        return _custom_logger
     return _default_logger_factory.get_logger(tag)
-
-
-def set_custom_logger(logger: logging.Logger) -> None:
-    assert isinstance(logger, logging.Logger)
-    global _custom_logger
-    _custom_logger = logger
