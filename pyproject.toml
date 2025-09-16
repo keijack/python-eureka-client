@@ -14,10 +14,9 @@ authors = [
 ]
 requires-python = ">=3.7"
 keywords = ["eureka", "netflix", "microservice"]
-license = {file = "LICENSE"}
+license = "MIT"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 dynamic = ["version"]
