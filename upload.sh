@@ -2,7 +2,7 @@
 
 rm dist/*
 
-python3 -m pip install --upgrade build twine pkginfo
+python3 -m pip install --upgrade build wheel twine pkginfo
 
 python3 -m build --sdist --wheel .
 
