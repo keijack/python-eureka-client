@@ -177,6 +177,20 @@ class DiscoverException(http_client.URLError):
     pass
 
 
+class NodeError:
+
+    def __init__(self, node, error: Exception):
+        self.node = node
+        self.error = error
+
+
+class WalkNodeException(http_client.URLError):
+
+    def __init__(self, reason, node_errors: List[NodeError] = []):
+        super(WalkNodeException, self).__init__("", reason)
+        self.node_errors = node_errors or []
+
+
 class EurekaClient:
     """
     Example:
@@ -333,9 +347,9 @@ class EurekaClient:
 
     * ha_strategy: Specify the strategy how to choose a instance when there are more than one instanse of an App. 
 
-    * strict_service_error_policy: When set to True, all error(Including connection error and HttpError, like http 
-        status code is not 200) will consider as error; Otherwise, only (ConnectionError, TimeoutError, socket.timeout) 
-        will be considered as error, and other excptions and errors will be raised to upstream. Default is True.
+    * strict_service_error_policy: When set to True, all errors(Including connection error and HttpError, like http 
+        status code is not 200) will consider as errors; Otherwise, only (ConnectionError, TimeoutError, socket.timeout) 
+        will be considered as errors, and other excptions and errors will be raised to upstream. Default is True.
 
     """
 
@@ -401,7 +415,7 @@ class EurekaClient:
         self.__alive = False
         self.__heartbeat_interval = renewal_interval_in_secs
         self.__heartbeat_timer = Timer(self.__heartbeat_interval, self.__heartbeat_thread)
-        self.__heartbeat_timer.setName("HeartbeatThread")
+        self.__heartbeat_timer.name = "HeartbeatThread"
         self.__heartbeat_timer.daemon = True
 
         self.__instance_id = instance_id
@@ -880,6 +894,7 @@ class EurekaClient:
         error_nodes = []
         app_name = app_name.upper()
         node = self.__get_available_service(app_name)
+        node_errors: List[NodeError] = []
 
         while node is not None:
             try:
@@ -896,11 +911,13 @@ class EurekaClient:
                 else:
                     return obj
             except (ConnectionError, TimeoutError, socket.timeout) as e:
+                node_errors.append(NodeError(node.instanceId, e))
                 _logger.warning(
                     f"do service {service} in node [{node.instanceId}] error, use next node. Error: {e}")
                 error_nodes.append(node.instanceId)
                 node = self.__get_available_service(app_name, error_nodes)
             except (http_client.HTTPError, http_client.URLError) as e:
+                node_errors.append(NodeError(node.instanceId, e))
                 if self.__strict_service_error_policy:
                     _logger.warning(
                         f"do service {service} in node [{node.instanceId}] error, use next node. Error: {e}")
@@ -909,8 +926,7 @@ class EurekaClient:
                 else:
                     raise e
 
-        raise http_client.URLError(
-            "Try all up instances in registry, but all fail")
+        raise WalkNodeException("Try all up instances in registry, but all fail", node_errors)
 
     async def do_service(self, app_name: str = "", service: str = "", return_type: str = "string",
                          prefer_ip: bool = False, prefer_https: bool = False,
