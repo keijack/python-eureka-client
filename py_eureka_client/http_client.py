@@ -24,19 +24,13 @@ SOFTWARE.
 
 import re
 import base64
-import gzip
-import urllib.request
-import urllib.error
+import httpx
 from urllib.error import HTTPError, URLError
+from io import BytesIO
 
 from typing import Union
 from urllib.parse import unquote
 
-
-"""
-Default encoding
-"""
-_DEFAULT_ENCODING = "utf-8"
 
 _URL_REGEX = re.compile(
     r'^((?:http)s?)://'  # http:// or https://
@@ -86,7 +80,8 @@ class HttpRequest:
 
         self.url = url_addr
         self.headers = headers or {}
-        self.method = method
+        self.method = method or "GET"
+        self.content = None
 
         if url_auth is not None:
             self.headers['Authorization'] = f'Basic {url_auth}'
@@ -94,38 +89,23 @@ class HttpRequest:
     def add_header(self, key: str, value: str):
         self.headers[key] = value
 
-    def _to_urllib_request(self):
-        return urllib.request.Request(self.url, headers=self.headers, method=self.method)
+    def _to_httpx_request(self) -> httpx.Request:
+        return httpx.Request(self.method, self.url, headers=self.headers, content=self.content)
 
 
 class HttpResponse:
 
     def __init__(self, raw_response=None) -> None:
-        self.raw_response = raw_response
-        self.__body_read = False
-        self.__body_text = ''
-
-    def _read_body(self):
-        res = self.raw_response
-        if res.info().get("Content-Encoding") == "gzip":
-            f = gzip.GzipFile(fileobj=res)
-        else:
-            f = res
-        body_text = f.read().decode(_DEFAULT_ENCODING)
-        f.close()
-        return body_text
+        self.raw_response: httpx.Response = raw_response
+        self.__body_text = self.raw_response.text if self.raw_response else ''
 
     @property
-    def body_text(self):
-        if not self.__body_read:
-            self.__body_text = self._read_body()
-            self.__body_read = True
+    def body_text(self) -> str:
         return self.__body_text
 
     @body_text.setter
-    def body_text(self, val):
-        self.__body_text = val
-        self.__body_read = True
+    def body_text(self, value) -> None:
+        self.__body_text = value
 
 
 class HttpClient:
@@ -135,14 +115,25 @@ class HttpClient:
         if isinstance(request, HttpRequest):
             req = request
         elif isinstance(request, str):
-            req = HttpRequest(request, headers={'Accept-Encoding': 'gzip'})
+            req = HttpRequest(request)
         else:
             raise URLError("Invalid URL")
 
-        req = req._to_urllib_request()
+        if data is not None:
+            req.content = data
+
         req.add_header("Connection", "close")
-        res = urllib.request.urlopen(req, data=data, timeout=timeout)
-        return HttpResponse(res)
+        req.add_header("Accept-Encoding", "gzip, deflate")
+
+        try:
+            async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+                res = await client.send(req._to_httpx_request())
+                res.raise_for_status()
+                return HttpResponse(res)
+        except httpx.HTTPStatusError as e:
+            raise HTTPError(e.request.url, e.response.status_code, str(e), e.response.headers, BytesIO(e.response.content)) from e
+        except httpx.RequestError as e:
+            raise URLError(str(e)) from e
 
 
 http_client = HttpClient()
