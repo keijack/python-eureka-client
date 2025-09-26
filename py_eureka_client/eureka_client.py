@@ -686,16 +686,16 @@ class EurekaClient:
     @staticmethod
     def __get_instance_ip(eureka_server):
         url_obj = http_client.parse_url(eureka_server)
-        target_ip = url_obj["host"]
-        target_port = url_obj["port"]
+        target_ip = url_obj.host
+        target_port = url_obj.port
         if target_port is None:
-            if url_obj["schema"] == "http":
+            if url_obj.schema == "http":
                 target_port = 80
             else:
                 target_port = 443
 
-        if url_obj["ipv6"] is not None:
-            target_ip = url_obj["ipv6"]
+        if url_obj.ipv6 is not None:
+            target_ip = url_obj.ipv6
             socket_family = socket.AF_INET6
         else:
             socket_family = socket.AF_INET

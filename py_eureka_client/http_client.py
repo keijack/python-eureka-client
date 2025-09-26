@@ -46,24 +46,41 @@ _URL_REGEX = re.compile(
     r'(?:/?|[/?]\S+)$', re.IGNORECASE)
 
 
-def parse_url(url):
+class URLObj:
+
+    def __init__(self,
+                 url: str = None,
+                 basic_auth: str = None,
+                 schema: str = None,
+                 host: str = None,
+                 ipv6: str = None,
+                 port: int = None) -> None:
+        self.url: str = url
+        self.basic_auth: str = basic_auth
+        self.schema: str = schema
+        self.host: str = host
+        self.ipv6: str = ipv6
+        self.port: int = port
+
+
+def parse_url(url) -> URLObj:
     m = _URL_REGEX.match(url)
     if m:
         addr = url
         if m.group(2) is not None:
             addr = addr.replace(m.group(2), "")
             ori_auth = f"{unquote(m.group(3))}:{unquote(m.group(4))}".encode()
-            auth_str = base64.standard_b64encode(ori_auth).decode()
+            basic_auth_str = base64.standard_b64encode(ori_auth).decode()
         else:
-            auth_str = None
-        return {
-            "url": addr,
-            "auth": auth_str,
-            "schema": m.group(1),
-            "host": m.group(5),
-            "ipv6": m.group(6),
-            "port": int(m.group(7)) if m.group(7) is not None else None
-        }
+            basic_auth_str = None
+        return URLObj(
+            url=addr,
+            basic_auth=basic_auth_str,
+            schema=m.group(1),
+            host=m.group(5),
+            ipv6=m.group(6),
+            port=int(m.group(7)) if m.group(7) is not None else None
+        )
     else:
         raise URLError(f"url[{url}] is not a valid url.")
 
@@ -75,8 +92,8 @@ class HttpRequest:
         if url_match is None:
             raise URLError("Unvalid URL")
         url_obj = parse_url(url)
-        url_addr = url_obj["url"]
-        url_auth = url_obj["auth"]
+        url_addr = url_obj.url
+        url_auth = url_obj.basic_auth
 
         self.url = url_addr
         self.headers = headers or {}
