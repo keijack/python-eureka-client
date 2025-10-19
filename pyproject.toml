@@ -22,7 +22,8 @@ classifiers = [
 dynamic = ["version"]
 dependencies = [
     "ifaddr>=0.2.0",
-    "dnspython>=2.4.2"
+    "dnspython>=2.4.2",
+    "httpx>=0.23.0"
 ]
 
 [tool.setuptools]
