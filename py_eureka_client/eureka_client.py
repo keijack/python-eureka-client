@@ -414,6 +414,7 @@ class EurekaClient:
         self.__prefer_same_zone = prefer_same_zone
         self.__alive = False
         self.__heartbeat_interval = renewal_interval_in_secs
+        self.__heartbeat_stopped = threading.Event()
         self.__heartbeat_timer = Timer(self.__heartbeat_interval, self.__heartbeat_thread)
         self.__heartbeat_timer.name = "HeartbeatThread"
         self.__heartbeat_timer.daemon = True
@@ -794,9 +795,10 @@ class EurekaClient:
     def __heartbeat_thread(self):
         _logger.debug("Start heartbeat!")
         loop = asyncio.new_event_loop()
-        while True:
+        while not self.__heartbeat_stopped.is_set():
             loop.run_until_complete(self.__heartbeat())
-            time.sleep(self.__heartbeat_interval)
+            self.__heartbeat_stopped.wait(self.__heartbeat_interval)
+        loop.close()
 
     async def __heartbeat(self):
         if self.__should_register:
@@ -1063,8 +1065,14 @@ class EurekaClient:
         self.__heartbeat_timer.start()
 
     async def stop(self) -> None:
+        self.__heartbeat_stopped.set()
         if self.__heartbeat_timer.is_alive():
             self.__heartbeat_timer.cancel()
+        if threading.current_thread() is not self.__heartbeat_timer:
+            # a running heartbeat may register this instance again, wait for it to finish
+            deadline = time.time() + 2 * _DEFAULT_TIME_OUT
+            while self.__heartbeat_timer.is_alive() and time.time() < deadline:
+                await asyncio.sleep(0.1)
         if self.__should_register:
             await self.__stop_registery()
 
@@ -1122,7 +1130,7 @@ async def init_async(eureka_server: str = _DEFAULT_EUREKA_SERVER_URL,
         if __cache_key in __cache_clients:
             _logger.warn(
                 "A client is already running, try to stop it and start the new one!")
-            __cache_clients[__cache_key].stop()
+            await __cache_clients[__cache_key].stop()
             del __cache_clients[__cache_key]
         client = EurekaClient(eureka_server=eureka_server,
                               eureka_domain=eureka_domain,
