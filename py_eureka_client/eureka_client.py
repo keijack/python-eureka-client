@@ -415,9 +415,7 @@ class EurekaClient:
         self.__alive = False
         self.__heartbeat_interval = renewal_interval_in_secs
         self.__heartbeat_stopped = threading.Event()
-        self.__heartbeat_timer = Timer(self.__heartbeat_interval, self.__heartbeat_thread)
-        self.__heartbeat_timer.name = "HeartbeatThread"
-        self.__heartbeat_timer.daemon = True
+        self.__heartbeat_timer = None
 
         self.__instance_id = instance_id
         self.__instance_ip = instance_ip
@@ -792,12 +790,12 @@ class EurekaClient:
             await self.register(status=INSTANCE_STATUS_DOWN)
             await self.cancel()
 
-    def __heartbeat_thread(self):
+    def __heartbeat_thread(self, heartbeat_stopped):
         _logger.debug("Start heartbeat!")
         loop = asyncio.new_event_loop()
-        while not self.__heartbeat_stopped.is_set():
+        while not heartbeat_stopped.is_set():
             loop.run_until_complete(self.__heartbeat())
-            self.__heartbeat_stopped.wait(self.__heartbeat_interval)
+            heartbeat_stopped.wait(self.__heartbeat_interval)
         loop.close()
 
     async def __heartbeat(self):
@@ -1057,22 +1055,29 @@ class EurekaClient:
         await self.__pull_full_registry()
 
     async def start(self) -> None:
+        if self.__heartbeat_timer is not None and self.__heartbeat_timer.is_alive() and not self.__heartbeat_stopped.is_set():
+            _logger.warning("The client is already started.")
+            return
+        self.__heartbeat_stopped = threading.Event()
         if self.should_register:
             await self.__parepare_instance_info()
             await self.__start_register()
         if self.should_discover:
             await self.__start_discover()
+        self.__heartbeat_timer = Timer(self.__heartbeat_interval, self.__heartbeat_thread, [self.__heartbeat_stopped])
+        self.__heartbeat_timer.name = "HeartbeatThread"
+        self.__heartbeat_timer.daemon = True
         self.__heartbeat_timer.start()
 
     async def stop(self) -> None:
         self.__heartbeat_stopped.set()
-        if self.__heartbeat_timer.is_alive():
+        if self.__heartbeat_timer is not None:
             self.__heartbeat_timer.cancel()
-        if threading.current_thread() is not self.__heartbeat_timer:
-            # a running heartbeat may register this instance again, wait for it to finish
-            deadline = time.time() + 2 * _DEFAULT_TIME_OUT
-            while self.__heartbeat_timer.is_alive() and time.time() < deadline:
-                await asyncio.sleep(0.1)
+            if threading.current_thread() is not self.__heartbeat_timer:
+                # a running heartbeat may register this instance again, wait for it to finish
+                deadline = time.time() + 2 * _DEFAULT_TIME_OUT
+                while self.__heartbeat_timer.is_alive() and time.time() < deadline:
+                    await asyncio.sleep(0.1)
         if self.__should_register:
             await self.__stop_registery()
 
