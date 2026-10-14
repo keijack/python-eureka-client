@@ -211,12 +211,12 @@ eureka_client.init(eureka_server="your-eureka-server-peer1,your-eureka-server-pe
 
 You can specify a callback function when initializing the eureka client, when errors occur in `register`, `discover` or `status update` phase, the callback function will be called to inform you. The callback function will be called only when all the eureka server url are all tried and fails. 
 
-The callback function should accept 2 arguments. which are the error type and the exception itself. please check:
+The callback function should accept 2 arguments. which are the error type and the exception itself. It can be a normal or an `async` function. please check:
 
 ```python
-def on_err(err_type: str, err: Exception):
+async def on_err(err_type: str, err: Exception):
     if err_type in (eureka_client.ERROR_REGISTER, eureka_client.ERROR_DISCOVER):
-        eureka_client.stop()
+        await eureka_client.stop_async()
     else:
         print(f"{err_type}::{err}")
 

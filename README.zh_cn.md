@@ -221,12 +221,12 @@ eureka_client.init(eureka_server="your-eureka-server-peer1,your-eureka-server-pe
 
 你可以在初始化时指定一个错误回调函数，当`注册`、`发现`、`状态更新`时，如果发生错误，这个回调函数会被触发。请注意，如果你传入多个 eureka 服务器的 url，那么该回调会在所有服务器均尝试失败之后才会被触发。
 
-定义的回调函数必须接收两个变量：一个是错误类型，一个是异常本身，请参考：
+定义的回调函数必须接收两个变量：一个是错误类型，一个是异常本身。回调函数可以是普通函数，也可以是 `async` 函数。请参考：
 
 ```python
-def on_err(err_type: str, err: Exception):
+async def on_err(err_type: str, err: Exception):
     if err_type in (eureka_client.ERROR_REGISTER, eureka_client.ERROR_DISCOVER):
-        eureka_client.stop()
+        await eureka_client.stop_async()
     else:
         print(f"{err_type}::{err}")
 
