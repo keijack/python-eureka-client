@@ -526,7 +526,8 @@ class EurekaClient:
 
     async def __load_ec2_metadata_dict(self):
         # instance metadata
-        amazon_info = AmazonInfo()
+        # the connectivity check of AmazonInfo() blocks, so run it in a thread
+        amazon_info = await asyncio.get_running_loop().run_in_executor(None, AmazonInfo)
         mac = await amazon_info.get_ec2_metadata('mac')
         if mac:
             vpc_id = await amazon_info.get_ec2_metadata(
@@ -534,14 +535,14 @@ class EurekaClient:
         else:
             vpc_id = ""
         metadata = {
-            'instance-id': amazon_info.get_ec2_metadata('instance-id'),
-            'ami-id': amazon_info.get_ec2_metadata('ami-id'),
-            'instance-type': amazon_info.get_ec2_metadata('instance-type'),
-            'local-ipv4': amazon_info.get_ec2_metadata('local-ipv4'),
-            'local-hostname': amazon_info.get_ec2_metadata('local-hostname'),
-            'availability-zone': amazon_info.get_ec2_metadata('placement/availability-zone', ignore_error=True),
-            'public-hostname': amazon_info.get_ec2_metadata('public-hostname', ignore_error=True),
-            'public-ipv4': amazon_info.get_ec2_metadata('public-ipv4', ignore_error=True),
+            'instance-id': await amazon_info.get_ec2_metadata('instance-id'),
+            'ami-id': await amazon_info.get_ec2_metadata('ami-id'),
+            'instance-type': await amazon_info.get_ec2_metadata('instance-type'),
+            'local-ipv4': await amazon_info.get_ec2_metadata('local-ipv4'),
+            'local-hostname': await amazon_info.get_ec2_metadata('local-hostname'),
+            'availability-zone': await amazon_info.get_ec2_metadata('placement/availability-zone', ignore_error=True),
+            'public-hostname': await amazon_info.get_ec2_metadata('public-hostname', ignore_error=True),
+            'public-ipv4': await amazon_info.get_ec2_metadata('public-ipv4', ignore_error=True),
             'mac': mac,
             'vpcId': vpc_id
         }
