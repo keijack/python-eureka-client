@@ -534,7 +534,7 @@ async def get_app_instance(eureka_server: str, app_name: str, instance_id: str) 
 
 
 async def get_instance(eureka_server: str, instance_id: str) -> Instance:
-    res = _get_instance_(
+    res = await _get_instance_(
         f"{_format_url(eureka_server)}instances/{quote(instance_id)}")
     return res
 

@@ -570,8 +570,6 @@ class EurekaClient:
             raise DiscoverException(
                 "should_discover set to False, no registry is pulled, cannot find any applications.")
         with self.__application_mth_lock:
-            if self.__applications is None:
-                self.__pull_full_registry()
             return self.__applications
 
     async def __try_eureka_server_in_cache(self, fun):
@@ -708,11 +706,10 @@ class EurekaClient:
         return ip
 
     async def _on_error(self, error_type: str, exception: Exception):
-        if self.__on_error_callback:
-            if asyncio.iscoroutine(self.__on_error_callback):
-                await self.__on_error_callback(error_type, exception)
-            elif callable(self.__on_error_callback):
-                self.__on_error_callback(error_type, exception)
+        if callable(self.__on_error_callback):
+            callback_result = self.__on_error_callback(error_type, exception)
+            if asyncio.iscoroutine(callback_result):
+                await callback_result
 
     async def register(self, status: str = INSTANCE_STATUS_UP, overriddenstatus: str = INSTANCE_STATUS_UNKNOWN) -> None:
         self.__instance["status"] = status
@@ -894,6 +891,9 @@ class EurekaClient:
 
         error_nodes = []
         app_name = app_name.upper()
+        if self.should_discover and self.__applications is None:
+            # the registry could not be pulled at start, try again
+            await self.__pull_full_registry()
         node = self.__get_available_service(app_name)
         node_errors: List[NodeError] = []
 
