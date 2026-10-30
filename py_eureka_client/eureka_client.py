@@ -396,7 +396,6 @@ class EurekaClient:
         assert ha_strategy in (HA_STRATEGY_RANDOM, HA_STRATEGY_STICK,
                                HA_STRATEGY_OTHER) if should_discover else True, f"do not support strategy {ha_strategy}"
 
-        self.__net_lock = asyncio.Lock()
         self.__eureka_server_conf = EurekaServerConf(
             eureka_server=eureka_server,
             eureka_domain=eureka_domain,
@@ -574,7 +573,7 @@ class EurekaClient:
     async def __try_eureka_server_in_cache(self, fun):
         ok = False
         invalid_keys = []
-        for z, url in self.__cache_eureka_url.items():
+        for z, url in list(self.__cache_eureka_url.items()):
             try:
                 _logger.debug(
                     f"Try to do {fun.__name__} in zone[{z}] using cached url {url}. ")
@@ -589,7 +588,7 @@ class EurekaClient:
             _logger.debug(
                 f"Invalid keys::{invalid_keys} will be removed from cache.")
             for z in invalid_keys:
-                del self.__cache_eureka_url[z]
+                self.__cache_eureka_url.pop(z, None)
         if not ok:
             raise EurekaServerConnectionException(
                 "All eureka servers in cache are down!")
@@ -632,28 +631,26 @@ class EurekaClient:
             await self.__try_eureka_server_regardless_zones(fun)
 
     async def __try_eureka_servers_in_list(self, fun, eureka_servers=[], zone=_DEFAUTL_ZONE):
-        async with self.__net_lock:
-            ok = False
-            _zone = zone if zone else _DEFAUTL_ZONE
-            for url in eureka_servers:
-                url = url.strip()
-                try:
-                    _logger.debug(
-                        f"try to do {fun.__name__} in zone[{_zone}] using url {url}. ")
-                    await fun(url)
-                except (http_client.HTTPError, http_client.URLError):
-                    _logger.warn(
-                        f"Eureka server [{url}] is down, use next url to try.", exc_info=True)
-                else:
-                    ok = True
-                    self.__cache_eureka_url[_zone] = url
-                    break
+        ok = False
+        _zone = zone if zone else _DEFAUTL_ZONE
+        for url in eureka_servers:
+            url = url.strip()
+            try:
+                _logger.debug(
+                    f"try to do {fun.__name__} in zone[{_zone}] using url {url}. ")
+                await fun(url)
+            except (http_client.HTTPError, http_client.URLError):
+                _logger.warn(
+                    f"Eureka server [{url}] is down, use next url to try.", exc_info=True)
+            else:
+                ok = True
+                self.__cache_eureka_url[_zone] = url
+                break
 
-            if not ok:
-                if _zone in self.__cache_eureka_url:
-                    del self.__cache_eureka_url[_zone]
-                raise EurekaServerConnectionException(
-                    f"All eureka servers in zone[{_zone}] are down!")
+        if not ok:
+            self.__cache_eureka_url.pop(_zone, None)
+            raise EurekaServerConnectionException(
+                f"All eureka servers in zone[{_zone}] are down!")
 
     async def __connect_to_eureka_server(self, fun):
         if self.__cache_eureka_url:
