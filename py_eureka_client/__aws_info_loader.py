@@ -24,12 +24,13 @@ SOFTWARE.
 import socket
 import json
 import time
-from py_eureka_client.http_client import http_client
+import py_eureka_client.http_client as http_client
 from py_eureka_client.logger import get_logger
 
 _logger = get_logger("aws_info_loader")
 
 _CONNECTIVITY_TEST_TIMES = 5
+_CONNECTIVITY_TEST_TIMEOUT = 1
 _AWS_METADATA_SERVICE_IP = "169.254.169.254"
 _AWS_METADATA_SERVICE_URL = f"http://{_AWS_METADATA_SERVICE_IP}/latest/"
 
@@ -43,6 +44,7 @@ class AmazonInfo:
         for i in range(_CONNECTIVITY_TEST_TIMES):
             try:
                 s = socket.socket()
+                s.settimeout(_CONNECTIVITY_TEST_TIMEOUT)
                 s.connect((_AWS_METADATA_SERVICE_IP, 80))
                 s.close()
                 return True
@@ -61,7 +63,7 @@ class AmazonInfo:
                 f"Cannot connect to amazon metadata services in address [{_AWS_METADATA_SERVICE_IP}], return default value. ")
             return default_value
         try:
-            res = await http_client.urlopen(f"{_AWS_METADATA_SERVICE_URL}meta-data/{meta_path}")
+            res = await http_client.http_client.urlopen(f"{_AWS_METADATA_SERVICE_URL}meta-data/{meta_path}")
             return res.body_text
         except Exception:
             log_excep = _logger.debug if ignore_error else _logger.exception
@@ -74,7 +76,7 @@ class AmazonInfo:
                 f"Cannot connect to amazon metadata services in address [{_AWS_METADATA_SERVICE_IP}], return default value. ")
             return default_value
         try:
-            doc = await http_client.urlopen(f"{_AWS_METADATA_SERVICE_URL}dynamic/instance-identity/document")
+            doc = await http_client.http_client.urlopen(f"{_AWS_METADATA_SERVICE_URL}dynamic/instance-identity/document")
             return json.loads(doc.body_text)
         except Exception:
             _logger.exception(
